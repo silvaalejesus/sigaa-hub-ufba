@@ -1,57 +1,73 @@
 import { SearchX } from 'lucide-react'
-
-interface Disciplina {
-  id: string
-  codigo: string
-  nome: string
-  totalTurmas: number
-}
+import { buscarDisciplinas } from '@/features/disciplinas/queries'
+import { DisciplinaCard } from '@/features/disciplinas/components/disciplina-card'
 
 interface DisciplinaListProps {
-  /** Será populado a partir do Supabase em uma etapa futura. */
-  disciplinas?: Disciplina[]
+  /** Termo de busca vindo dos searchParams da página pai. */
+  query?: string
 }
 
-export function DisciplinaList({ disciplinas = [] }: DisciplinaListProps) {
+/**
+ * Server Component: executa a query no Supabase e renderiza o resultado.
+ * É re-renderizado automaticamente quando `query` muda via searchParams.
+ */
+export async function DisciplinaList({ query }: DisciplinaListProps) {
+  const disciplinas = await buscarDisciplinas(query)
+  const temBusca = (query?.trim().length ?? 0) > 0
+
   if (disciplinas.length === 0) {
-    return <EmptyState />
+    return <EmptyState hasQuery={temBusca} query={query} />
   }
 
   return (
-    <ul className="grid grid-cols-1 gap-4 md:grid-cols-2">
+    <ul
+      className="grid grid-cols-1 gap-4 md:grid-cols-2"
+      aria-label="Lista de disciplinas"
+    >
       {disciplinas.map((disciplina) => (
-        <li
-          key={disciplina.id}
-          className="rounded-3xl border-2 border-border bg-card p-6 shadow-positivus"
-        >
-          <span className="inline-block rounded-md bg-primary px-2 py-0.5 font-mono text-sm font-semibold text-primary-foreground">
-            {disciplina.codigo}
-          </span>
-          <h3 className="mt-3 text-lg font-bold text-card-foreground text-balance">
-            {disciplina.nome}
-          </h3>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {disciplina.totalTurmas} turma(s) no semestre vigente
-          </p>
-        </li>
+        <DisciplinaCard key={disciplina.id} disciplina={disciplina} />
       ))}
     </ul>
   )
 }
 
-function EmptyState() {
+function EmptyState({
+  hasQuery,
+  query,
+}: {
+  hasQuery: boolean
+  query?: string
+}) {
   return (
     <div className="flex flex-col items-center justify-center rounded-3xl border-2 border-dashed border-border bg-card px-6 py-16 text-center">
       <span className="flex size-16 items-center justify-center rounded-full bg-primary text-primary-foreground">
         <SearchX className="size-8" aria-hidden="true" />
       </span>
-      <h3 className="mt-5 text-xl font-bold text-card-foreground">
-        Comece pela busca
-      </h3>
-      <p className="mt-2 max-w-md text-pretty text-muted-foreground">
-        Digite o nome ou o código de uma disciplina para ver as turmas abertas
-        no semestre 2026.1 e os grupos de WhatsApp disponíveis.
-      </p>
+
+      {hasQuery ? (
+        <>
+          <h3 className="mt-5 text-xl font-bold text-card-foreground">
+            Nenhuma disciplina encontrada
+          </h3>
+          <p className="mt-2 max-w-md text-pretty text-muted-foreground">
+            Não encontramos nenhuma disciplina para{' '}
+            <strong className="font-semibold text-foreground">
+              &quot;{query}&quot;
+            </strong>
+            . Verifique o nome ou código e tente novamente.
+          </p>
+        </>
+      ) : (
+        <>
+          <h3 className="mt-5 text-xl font-bold text-card-foreground">
+            Comece pela busca
+          </h3>
+          <p className="mt-2 max-w-md text-pretty text-muted-foreground">
+            Digite o nome ou o código de uma disciplina para ver as turmas
+            abertas no semestre 2026.1 e os grupos de WhatsApp disponíveis.
+          </p>
+        </>
+      )}
     </div>
   )
 }

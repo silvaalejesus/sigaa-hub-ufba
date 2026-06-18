@@ -1,9 +1,17 @@
-import { MessageCircle, ShieldCheck, Zap } from 'lucide-react'
+import { Suspense } from 'react'
+import { MessageCircle, ShieldCheck, Zap, Loader2 } from 'lucide-react'
 import { SiteHeader } from '@/components/site-header'
 import { SearchBar } from '@/features/disciplinas/components/search-bar'
 import { DisciplinaList } from '@/features/disciplinas/components/disciplina-list'
 
-export default function HomePage() {
+interface HomePageProps {
+  searchParams: Promise<{ q?: string }>
+}
+
+export default async function HomePage({ searchParams }: HomePageProps) {
+  const { q } = await searchParams
+  const query = q?.trim() ?? ''
+
   return (
     <div className="min-h-screen bg-background">
       <SiteHeader />
@@ -23,20 +31,25 @@ export default function HomePage() {
             Tudo em um só lugar, sem precisar de conta.
           </p>
 
+          {/* SearchBar precisa de Suspense pois usa useSearchParams internamente */}
           <div className="mt-8 max-w-2xl">
-            <SearchBar />
+            <Suspense fallback={<SearchBarSkeleton />}>
+              <SearchBar defaultValue={query} />
+            </Suspense>
           </div>
         </section>
 
-        {/* Listagem */}
+        {/* Listagem — Server Component re-renderizado a cada mudança de URL */}
         <section className="mt-12" aria-labelledby="resultados-heading">
           <h2
             id="resultados-heading"
             className="mb-6 text-2xl font-bold text-foreground"
           >
-            Disciplinas
+            {query.length > 0 ? `Resultados para "${query}"` : 'Disciplinas'}
           </h2>
-          <DisciplinaList />
+          <Suspense key={query} fallback={<ListSkeleton />}>
+            <DisciplinaList query={query} />
+          </Suspense>
         </section>
 
         {/* Como funciona */}
@@ -71,6 +84,47 @@ export default function HomePage() {
   )
 }
 
+// ---------------------------------------------------------------------------
+// Skeletons
+// ---------------------------------------------------------------------------
+
+function SearchBarSkeleton() {
+  return (
+    <div className="h-14 w-full animate-pulse rounded-2xl border-2 border-border bg-muted" />
+  )
+}
+
+function ListSkeleton() {
+  return (
+    <div
+      className="grid grid-cols-1 gap-4 md:grid-cols-2"
+      aria-label="Carregando disciplinas"
+      aria-busy="true"
+    >
+      {Array.from({ length: 4 }).map((_, i) => (
+        <div
+          key={i}
+          className="rounded-3xl border-2 border-border bg-card p-6 shadow-positivus"
+        >
+          <div className="flex items-center gap-3">
+            <Loader2
+              className="size-5 animate-spin text-primary"
+              aria-hidden="true"
+            />
+            <span className="h-5 w-2/3 animate-pulse rounded-md bg-muted" />
+          </div>
+          <div className="mt-4 h-4 w-full animate-pulse rounded bg-muted" />
+          <div className="mt-2 h-4 w-3/4 animate-pulse rounded bg-muted" />
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// FeatureCard
+// ---------------------------------------------------------------------------
+
 function FeatureCard({
   icon,
   title,
@@ -90,13 +144,7 @@ function FeatureCard({
           : 'bg-card text-card-foreground'
       }`}
     >
-      <span
-        className={`flex size-12 items-center justify-center rounded-full ${
-          highlighted
-            ? 'bg-primary text-primary-foreground'
-            : 'bg-primary text-primary-foreground'
-        }`}
-      >
+      <span className="flex size-12 items-center justify-center rounded-full bg-primary text-primary-foreground">
         {icon}
       </span>
       <h3 className="mt-4 text-lg font-bold">{title}</h3>
