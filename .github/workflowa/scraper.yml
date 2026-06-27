@@ -1,0 +1,82 @@
+# .github/workflows/scraper.yml
+# Automatiza a coleta pública do SIGAA e o seed no Supabase.
+#
+# Execuções:
+# - Manual: pela aba Actions do GitHub.
+# - Agendada: nos dias 1 e 15 de cada mês, às 03:00 UTC.
+
+name: SIGAA Scraper
+
+on:
+  # Permite executar manualmente pelo botão "Run workflow"
+  workflow_dispatch:
+
+  # GitHub Actions usa cron em UTC.
+  # Este exemplo roda nos dias 1 e 15 de cada mês às 03:00 UTC.
+  schedule:
+    - cron: "0 3 1,15 * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sigaa-scraper
+  cancel-in-progress: false
+
+jobs:
+  scrape-and-seed:
+    name: Scrape SIGAA and seed Supabase
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    env:
+      # Secrets configurados no painel do GitHub.
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Install Playwright browsers and Linux dependencies
+        run: |
+          python -m playwright install --with-deps chromium
+
+      - name: Validate required environment variables
+        run: |
+          test -n "$SUPABASE_URL"
+          test -n "$SUPABASE_SERVICE_ROLE_KEY"
+
+      - name: Run SIGAA scraper
+        run: |
+          python main.py
+
+      - name: Seed Supabase database
+        run: |
+          python seed.py
+
+      - name: Upload generated data artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dados-sigaa
+          path: |
+            dados.json
+            dados_sigaa.json
+            debug_sigaa.html
+            erro_sigaa.png
+          if-no-files-found: ignore
