@@ -1,16 +1,24 @@
-import { Suspense } from 'react'
-import { MessageCircle, ShieldCheck, Zap, Loader2 } from 'lucide-react'
-import { SiteHeader } from '@/components/site-header'
-import { SearchBar } from '@/features/disciplinas/components/search-bar'
-import { DisciplinaList } from '@/features/disciplinas/components/disciplina-list'
+import { DisciplinaList } from "@/features/disciplinas/components/disciplina-list";
+import { SearchBar } from "@/features/disciplinas/components/search-bar";
+import { Loader2, MessageCircle, ShieldCheck, Zap } from "lucide-react";
+
+import { buscarDepartamentos } from "@/features/disciplinas/queries";
+import { SiteHeader } from "@/components/site-header";
+import { Suspense } from "react";
 
 interface HomePageProps {
-  searchParams: Promise<{ q?: string }>
+  searchParams: Promise<{
+    q?: string;
+    departamento?: string;
+  }>;
 }
 
 export default async function HomePage({ searchParams }: HomePageProps) {
-  const { q } = await searchParams
-  const query = q?.trim() ?? ''
+  const { q, departamento } = await searchParams;
+
+  const query = q?.trim() ?? "";
+  const departamentoSelecionado = departamento?.trim() ?? "";
+  const departamentos = await buscarDepartamentos();
 
   return (
     <div className="min-h-screen bg-background">
@@ -34,7 +42,12 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           {/* SearchBar precisa de Suspense pois usa useSearchParams internamente */}
           <div className="mt-8 max-w-2xl">
             <Suspense fallback={<SearchBarSkeleton />}>
-              <SearchBar defaultValue={query} />
+              {/* <SearchBar defaultValue={query} /> */}
+              <SearchBar
+                defaultValue={query}
+                defaultDepartamento={departamentoSelecionado}
+                departamentos={departamentos}
+              />
             </Suspense>
           </div>
         </section>
@@ -45,10 +58,14 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             id="resultados-heading"
             className="mb-6 text-2xl font-bold text-foreground"
           >
-            {query.length > 0 ? `Resultados para "${query}"` : 'Disciplinas'}
+            {query.length > 0 ? `Resultados para "${query}"` : "Disciplinas"}
           </h2>
           <Suspense key={query} fallback={<ListSkeleton />}>
-            <DisciplinaList query={query} />
+            {/* <DisciplinaList query={query} /> */}
+            <DisciplinaList
+              query={query}
+              departamento={departamentoSelecionado}
+            />
           </Suspense>
         </section>
 
@@ -81,7 +98,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         </section>
       </main>
     </div>
-  )
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -91,7 +108,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
 function SearchBarSkeleton() {
   return (
     <div className="h-14 w-full animate-pulse rounded-2xl border-2 border-border bg-muted" />
-  )
+  );
 }
 
 function ListSkeleton() {
@@ -118,7 +135,7 @@ function ListSkeleton() {
         </div>
       ))}
     </div>
-  )
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -131,17 +148,17 @@ function FeatureCard({
   description,
   highlighted = false,
 }: {
-  icon: React.ReactNode
-  title: string
-  description: string
-  highlighted?: boolean
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+  highlighted?: boolean;
 }) {
   return (
     <li
       className={`rounded-3xl border-2 border-border p-6 shadow-positivus ${
         highlighted
-          ? 'bg-secondary text-secondary-foreground'
-          : 'bg-card text-card-foreground'
+          ? "bg-secondary text-secondary-foreground"
+          : "bg-card text-card-foreground"
       }`}
     >
       <span className="flex size-12 items-center justify-center rounded-full bg-primary text-primary-foreground">
@@ -150,11 +167,11 @@ function FeatureCard({
       <h3 className="mt-4 text-lg font-bold">{title}</h3>
       <p
         className={`mt-2 text-sm leading-relaxed ${
-          highlighted ? 'text-secondary-foreground/80' : 'text-muted-foreground'
+          highlighted ? "text-secondary-foreground/80" : "text-muted-foreground"
         }`}
       >
         {description}
       </p>
     </li>
-  )
+  );
 }

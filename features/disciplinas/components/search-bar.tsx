@@ -1,92 +1,157 @@
-'use client'
+"use client";
 
-import { useEffect, useRef, useState } from 'react'
-import { useRouter, usePathname, useSearchParams } from 'next/navigation'
-import { Search, X } from 'lucide-react'
-import { Input } from '@/components/ui/input'
-import { useDebouncedValue } from '@/utils/use-debounced-value'
+import { Building2, Search, X } from "lucide-react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useDebouncedValue } from "@/utils/use-debounced-value";
+
+const TODOS_DEPARTAMENTOS_VALUE = "__todos__";
 
 interface SearchBarProps {
-  /** Valor inicial vindo dos searchParams da URL (Server Component pai). */
-  defaultValue?: string
-  placeholder?: string
+  defaultValue?: string;
+  defaultDepartamento?: string;
+  departamentos?: string[];
+  placeholder?: string;
 }
 
 export function SearchBar({
-  defaultValue = '',
-  placeholder = 'Busque por nome ou código da disciplina (ex: MATA37)',
+  defaultValue = "",
+  defaultDepartamento = "",
+  departamentos = [],
+  placeholder = "Busque por nome ou código da disciplina (ex: MATA37)",
 }: SearchBarProps) {
-  const router = useRouter()
-  const pathname = usePathname()
-  const searchParams = useSearchParams()
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
 
-  const [term, setTerm] = useState(defaultValue)
-  const debouncedTerm = useDebouncedValue(term, 300)
+  const [term, setTerm] = useState(defaultValue);
+  const [departamento, setDepartamento] = useState(
+    defaultDepartamento || TODOS_DEPARTAMENTOS_VALUE,
+  );
 
-  // Evita que o useEffect dispare no mount e cause navegações abortadas.
-  // Só sincroniza a URL após a primeira interação real do usuário.
-  const hasMounted = useRef(false)
+  const debouncedTerm = useDebouncedValue(term, 300);
+  const hasMounted = useRef(false);
+
+  function updateUrl(nextValues: { q?: string; departamento?: string }) {
+    const params = new URLSearchParams(searchParams.toString());
+
+    if (nextValues.q !== undefined) {
+      const trimmed = nextValues.q.trim();
+
+      if (trimmed.length > 0) {
+        params.set("q", trimmed);
+      } else {
+        params.delete("q");
+      }
+    }
+
+    if (nextValues.departamento !== undefined) {
+      const trimmedDepartamento = nextValues.departamento.trim();
+
+      if (
+        trimmedDepartamento.length > 0 &&
+        trimmedDepartamento !== TODOS_DEPARTAMENTOS_VALUE
+      ) {
+        params.set("departamento", trimmedDepartamento);
+      } else {
+        params.delete("departamento");
+      }
+    }
+
+    const queryString = params.toString();
+
+    router.replace(queryString ? `${pathname}?${queryString}` : pathname, {
+      scroll: false,
+    });
+  }
 
   useEffect(() => {
     if (!hasMounted.current) {
-      hasMounted.current = true
-      return
+      hasMounted.current = true;
+      return;
     }
 
-    const params = new URLSearchParams(searchParams.toString())
-    const trimmed = debouncedTerm.trim()
+    updateUrl({ q: debouncedTerm });
 
-    if (trimmed.length > 0) {
-      params.set('q', trimmed)
-    } else {
-      params.delete('q')
-    }
-
-    router.replace(`${pathname}?${params.toString()}`, { scroll: false })
-    // searchParams intencionalmente omitido: usar snapshot estável evita loop infinito.
+    // searchParams intencionalmente omitido para evitar loop com snapshots novos.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedTerm, pathname, router])
+  }, [debouncedTerm, pathname, router]);
 
   function handleClear() {
-    setTerm('')
+    setTerm("");
+    updateUrl({ q: "" });
+  }
+
+  function handleDepartamentoChange(value: string) {
+    setDepartamento(value);
+    updateUrl({ departamento: value });
   }
 
   return (
-    <form
-      role="search"
-      onSubmit={(event) => event.preventDefault()}
-      className="w-full"
-    >
-      <label htmlFor="disciplina-search" className="sr-only">
-        Buscar disciplina
-      </label>
-      <div className="group relative rounded-2xl border-2 border-border bg-background shadow-positivus transition-transform focus-within:translate-x-[2px] focus-within:translate-y-[2px] focus-within:shadow-none">
-        <Search
-          aria-hidden="true"
-          className="pointer-events-none absolute left-5 top-1/2 size-5 -translate-y-1/2 text-muted-foreground"
-        />
+    <div className="grid gap-3 rounded-3xl border bg-background/80 p-3 shadow-sm backdrop-blur md:grid-cols-[minmax(0,1fr)_320px]">
+      <form
+        onSubmit={(event) => event.preventDefault()}
+        className="relative w-full"
+      >
+        <label htmlFor="disciplina-search" className="sr-only">
+          Buscar disciplina
+        </label>
+
+        <Search className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-muted-foreground" />
+
         <Input
           id="disciplina-search"
-          name="q"
-          type="search"
-          autoComplete="off"
-          spellCheck={false}
           value={term}
           onChange={(event) => setTerm(event.target.value)}
           placeholder={placeholder}
-          className="h-14 border-0 bg-transparent pl-14 pr-12 text-base shadow-none focus-visible:ring-0"
+          className="h-12 border-0 bg-transparent pl-12 pr-12 text-base shadow-none focus-visible:ring-0"
         />
+
         {term.length > 0 && (
-          <button
+          <Button
             type="button"
-            onClick={handleClear}
+            variant="ghost"
+            size="icon-sm"
             aria-label="Limpar busca"
-            className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            className="absolute right-2 top-1/2 -translate-y-1/2"
+            onClick={handleClear}
           >
-            <X className="size-4" aria-hidden="true" />
-          </button>
+            <X className="size-4" />
+          </Button>
         )}
+      </form>
+
+      <div className="flex items-center gap-2 rounded-2xl border bg-muted/30 px-3">
+        <Building2 className="size-4 shrink-0 text-muted-foreground" />
+
+        <Select value={departamento} onValueChange={handleDepartamentoChange}>
+          <SelectTrigger className="h-12 border-0 bg-transparent px-0 shadow-none focus:ring-0">
+            <SelectValue placeholder="Instituto/Departamento" />
+          </SelectTrigger>
+
+          <SelectContent>
+            <SelectItem value={TODOS_DEPARTAMENTOS_VALUE}>
+              Todos os departamentos
+            </SelectItem>
+
+            {departamentos.map((item) => (
+              <SelectItem key={item} value={item}>
+                {item}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
-    </form>
-  )
+    </div>
+  );
 }

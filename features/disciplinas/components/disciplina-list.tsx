@@ -1,22 +1,28 @@
-import { SearchX } from 'lucide-react'
-import { buscarDisciplinas } from '@/features/disciplinas/queries'
-import { DisciplinaCard } from '@/features/disciplinas/components/disciplina-card'
+import { DisciplinaCard } from "@/features/disciplinas/components/disciplina-card";
+import { buscarDisciplinas } from "@/features/disciplinas/queries";
+import { SearchX } from "lucide-react";
 
 interface DisciplinaListProps {
-  /** Termo de busca vindo dos searchParams da página pai. */
-  query?: string
+  query?: string;
+  departamento?: string;
 }
-
 /**
  * Server Component: executa a query no Supabase e renderiza o resultado.
  * É re-renderizado automaticamente quando `query` muda via searchParams.
  */
-export async function DisciplinaList({ query }: DisciplinaListProps) {
-  const disciplinas = await buscarDisciplinas(query)
-  const temBusca = (query?.trim().length ?? 0) > 0
-
+export async function DisciplinaList({
+  query,
+  departamento,
+}: DisciplinaListProps) {
+  const disciplinas = await buscarDisciplinas({
+    query,
+    departamento,
+  });
+  // const temBusca = (query?.trim().length ?? 0) > 0
+  const temBusca =
+    (query?.trim().length ?? 0) > 0 || (departamento?.trim().length ?? 0) > 0;
   if (disciplinas.length === 0) {
-    return <EmptyState hasQuery={temBusca} query={query} />
+    return <EmptyState hasQuery={temBusca} query={query} />;
   }
 
   return (
@@ -28,15 +34,15 @@ export async function DisciplinaList({ query }: DisciplinaListProps) {
         <DisciplinaCard key={disciplina.id} disciplina={disciplina} />
       ))}
     </ul>
-  )
+  );
 }
 
 function EmptyState({
   hasQuery,
   query,
 }: {
-  hasQuery: boolean
-  query?: string
+  hasQuery: boolean;
+  query?: string;
 }) {
   return (
     <div className="flex flex-col items-center justify-center rounded-3xl border-2 border-dashed border-border bg-card px-6 py-16 text-center">
@@ -50,7 +56,7 @@ function EmptyState({
             Nenhuma disciplina encontrada
           </h3>
           <p className="mt-2 max-w-md text-pretty text-muted-foreground">
-            Não encontramos nenhuma disciplina para{' '}
+            Não encontramos nenhuma disciplina para{" "}
             <strong className="font-semibold text-foreground">
               &quot;{query}&quot;
             </strong>
@@ -69,5 +75,5 @@ function EmptyState({
         </>
       )}
     </div>
-  )
+  );
 }
