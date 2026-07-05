@@ -1,185 +1,137 @@
-"use client";
+'use client'
 
+import { useState } from 'react'
 import {
   ExternalLink,
-  Flag,
-  Loader2,
   MessageCircle,
   Users,
-} from "lucide-react";
-import { useState, useTransition } from "react";
-import { toast } from "sonner";
+} from 'lucide-react'
 
+import { Button, buttonVariants } from '@/components/ui/button'
 import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
-import { Button } from "@/components/ui/button";
-import { denunciarLink } from "@/features/turmas/actions";
-import { AddLinkModal } from "@/features/turmas/components/add-link-modal";
-
-interface Link {
-  id: string;
-  turma_id: string;
-  url_whatsapp: string;
-  reports: number;
-  is_active: boolean;
-  created_at: string;
-}
-
-interface Turma {
-  id: string;
-  disciplina_id: string;
-  codigo_turma: string;
-  professor: string | null;
-  semestre: string;
-  created_at: string;
-  links: Link[];
-}
-
-interface Disciplina {
-  id: string;
-  codigo: string;
-  nome: string;
-  departamento: string | null;
-  created_at: string;
-  turmas: Turma[];
-}
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { cn } from '@/lib/utils'
+import { AddLinkModal } from '@/features/turmas/components/add-link-modal'
+import { ReportModal } from '@/features/turmas/components/report-modal'
+import type { DisciplinaComTurmas } from '@/types/database'
 
 interface DisciplinaCardProps {
-  disciplina: Disciplina;
+  disciplina: DisciplinaComTurmas
 }
 
 export function DisciplinaCard({ disciplina }: DisciplinaCardProps) {
-  const [pendingLinkId, setPendingLinkId] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
+  const [open, setOpen] = useState(false)
 
-  const totalTurmas = disciplina.turmas.length;
+  const totalTurmas = disciplina.turmas.length
   const totalLinks = disciplina.turmas.reduce(
-    (acc, turma) => acc + turma.links.length,
+    (acc, turma) =>
+      acc + turma.links.filter((link) => link.is_active !== false).length,
     0,
-  );
-
-  function handleDenunciarLink(linkId: string) {
-    setPendingLinkId(linkId);
-
-    startTransition(async () => {
-      const result = await denunciarLink(linkId);
-
-      if (!result.ok) {
-        toast.error(result.message);
-        setPendingLinkId(null);
-        return;
-      }
-
-      toast.success(result.message);
-      setPendingLinkId(null);
-    });
-  }
+  )
 
   return (
-    <Accordion type="single" collapsible className="w-full">
-      <AccordionItem
-        value={disciplina.id}
-        className="overflow-hidden rounded-2xl border bg-card px-5 shadow-sm transition-colors hover:bg-muted/20"
-      >
-        <AccordionTrigger className="py-5 text-left hover:no-underline">
-          <div className="flex w-full flex-col gap-3 pr-4 md:flex-row md:items-start md:justify-between">
-            <div className="min-w-0 space-y-2">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="rounded-full bg-primary/10 px-2 py-1 text-xs font-semibold text-primary">
-                  {disciplina.codigo}
-                </span>
+    <>
+      <article className="flex h-full flex-col justify-between rounded-3xl border bg-card p-5 shadow-sm transition-colors hover:border-primary/30 hover:bg-muted/20">
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-bold tracking-wide text-primary">
+              {disciplina.codigo}
+            </span>
 
-                {disciplina.departamento && (
-                  <span className="rounded-full border px-2 py-1 text-xs text-muted-foreground">
-                    {disciplina.departamento}
-                  </span>
-                )}
-              </div>
+            {disciplina.departamento && (
+              <span className="line-clamp-1 rounded-full border px-3 py-1 text-xs text-muted-foreground">
+                {disciplina.departamento}
+              </span>
+            )}
+          </div>
 
-              <h3 className="text-lg font-semibold leading-tight">
-                {disciplina.nome}
-              </h3>
-            </div>
+          <div className="space-y-2">
+            <h3 className="line-clamp-2 text-lg font-semibold leading-tight">
+              {disciplina.nome}
+            </h3>
 
-            <div className="flex shrink-0 flex-wrap items-center gap-3 text-sm text-muted-foreground">
+            <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
               <span className="inline-flex items-center gap-1">
                 <Users className="size-4" />
-                {totalTurmas} {totalTurmas === 1 ? "turma" : "turmas"}
+                {totalTurmas} {totalTurmas === 1 ? 'turma' : 'turmas'}
               </span>
 
               <span className="inline-flex items-center gap-1">
                 <MessageCircle className="size-4" />
-                {totalLinks} {totalLinks === 1 ? "grupo" : "grupos"}
+                {totalLinks} {totalLinks === 1 ? 'grupo' : 'grupos'}
               </span>
             </div>
           </div>
-        </AccordionTrigger>
+        </div>
 
-        <AccordionContent className="pb-5">
-          <div className="mb-4 rounded-2xl bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+        <Button type="button" className="mt-5 w-full" onClick={() => setOpen(true)}>
+          Ver Turmas
+        </Button>
+      </article>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>
+              {disciplina.codigo} · {disciplina.nome}
+            </DialogTitle>
+            <DialogDescription>
+              Veja as turmas disponíveis e acesse ou contribua com os links dos
+              grupos.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="rounded-2xl bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
             Não existe grupo? Crie um no seu WhatsApp e cole o link de convite
             aqui.
           </div>
 
-          <div className="space-y-3">
+          <div className="max-h-[65vh] space-y-3 overflow-y-auto pr-1">
             {disciplina.turmas.map((turma) => {
-              const activeLinks = turma.links.filter((link) => link.is_active);
-              const link = activeLinks[0];
-              const isReportingThisLink =
-                isPending && pendingLinkId === link?.id;
+              const activeLinks = turma.links.filter(
+                (link) => link.is_active !== false,
+              )
+              const link = activeLinks[0]
 
               return (
                 <div
                   key={turma.id}
-                  className="flex flex-col gap-3 rounded-xl border bg-background p-4 sm:flex-row sm:items-center sm:justify-between"
+                  className="flex flex-col gap-4 rounded-2xl border bg-background p-4 md:flex-row md:items-center md:justify-between"
                 >
                   <div className="min-w-0 space-y-1">
-                    <p className="text-sm font-semibold">
+                    <p className="text-base font-semibold">
                       Turma {turma.codigo_turma}
                     </p>
 
                     <p className="truncate text-sm text-muted-foreground">
-                      {turma.professor ?? "Docente não informado"}
+                      {turma.professor ?? 'Docente não informado'}
                     </p>
                   </div>
 
                   {link ? (
                     <div className="flex flex-wrap items-center gap-2">
-                      <Button
-                        asChild
-                        size="sm"
-                        className="bg-emerald-100 text-emerald-900 hover:bg-emerald-200 dark:bg-emerald-950 dark:text-emerald-100 dark:hover:bg-emerald-900"
-                      >
-                        <a
-                          href={link.url_whatsapp}
-                          target="_blank"
-                          rel="noreferrer noopener"
-                        >
-                          Entrar no Grupo
-                          <ExternalLink className="size-4" />
-                        </a>
-                      </Button>
-
-                      <Button
-                        type="button"
-                        size="icon"
-                        variant="ghost"
-                        title="Denunciar link"
-                        aria-label={`Denunciar link da turma ${turma.codigo_turma}`}
-                        className="size-8 text-muted-foreground hover:text-destructive"
-                        disabled={isReportingThisLink}
-                        onClick={() => handleDenunciarLink(link.id)}
-                      >
-                        {isReportingThisLink ? (
-                          <Loader2 className="size-4 animate-spin" />
-                        ) : (
-                          <Flag className="size-4" />
+                      <a
+                        href={link.url_whatsapp}
+                        target="_blank"
+                        rel="noreferrer noopener"
+                        className={cn(
+                          buttonVariants({ size: 'lg' }),
+                          'h-11 min-w-40 bg-emerald-100 px-4 text-sm font-bold text-emerald-900 hover:bg-emerald-200 dark:bg-emerald-950 dark:text-emerald-100 dark:hover:bg-emerald-900',
                         )}
-                      </Button>
+                      >
+                        Entrar no Grupo
+                        <ExternalLink className="size-4" />
+                      </a>
+
+                      <ReportModal
+                        linkId={link.id}
+                        codigoTurma={turma.codigo_turma}
+                      />
                     </div>
                   ) : (
                     <AddLinkModal
@@ -188,11 +140,17 @@ export function DisciplinaCard({ disciplina }: DisciplinaCardProps) {
                     />
                   )}
                 </div>
-              );
+              )
             })}
           </div>
-        </AccordionContent>
-      </AccordionItem>
-    </Accordion>
-  );
+
+          {totalTurmas === 0 && (
+            <div className="rounded-2xl border border-dashed p-8 text-center text-sm text-muted-foreground">
+              Nenhuma turma disponível para esta disciplina no semestre vigente.
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
+  )
 }

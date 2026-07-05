@@ -1,146 +1,134 @@
+import { MessageCircle, ShieldCheck, Zap } from "lucide-react";
+import { Suspense } from "react";
+
+import { SiteFooter } from "@/components/site-footer";
+import { SiteHeader } from "@/components/site-header";
 import { DisciplinaList } from "@/features/disciplinas/components/disciplina-list";
 import { SearchBar } from "@/features/disciplinas/components/search-bar";
-import { Loader2, MessageCircle, ShieldCheck, Zap } from "lucide-react";
-
 import { buscarDepartamentos } from "@/features/disciplinas/queries";
-import { SiteHeader } from "@/components/site-header";
-import { Suspense } from "react";
 
 interface HomePageProps {
   searchParams: Promise<{
     q?: string;
     departamento?: string;
+    grupos?: string;
   }>;
 }
 
 export default async function HomePage({ searchParams }: HomePageProps) {
-  const { q, departamento } = await searchParams;
+  const { q, departamento, grupos } = await searchParams;
 
   const query = q?.trim() ?? "";
   const departamentoSelecionado = departamento?.trim() ?? "";
+  const apenasComGrupos = grupos === "1";
   const departamentos = await buscarDepartamentos();
 
   return (
-    <div className="min-h-screen bg-background">
+    <>
       <SiteHeader />
 
-      <main className="mx-auto w-full max-w-6xl px-4 pb-24 sm:px-6">
-        {/* Hero */}
-        <section className="pt-12 sm:pt-16">
-          <span className="inline-block rounded-md bg-primary px-3 py-1 text-sm font-semibold text-primary-foreground">
+      <main className="mx-auto w-full max-w-6xl px-4 py-8">
+        <section className="rounded-[2rem] border bg-gradient-to-br from-background via-background to-muted/70 p-6 shadow-sm md:p-10">
+          <p className="mb-4 inline-flex rounded-full bg-primary/10 px-3 py-1 text-sm font-semibold text-primary">
             UFBA · Semestre 2026.1
-          </span>
-          <h1 className="mt-5 max-w-3xl text-4xl font-bold leading-tight tracking-tight text-foreground text-balance sm:text-5xl lg:text-6xl">
+          </p>
+
+          <h1 className="max-w-3xl text-3xl font-bold tracking-tight md:text-5xl">
             Encontre os grupos de WhatsApp das suas turmas
           </h1>
-          <p className="mt-5 max-w-2xl text-lg leading-relaxed text-muted-foreground text-pretty">
+
+          <p className="mt-4 max-w-2xl text-base leading-7 text-muted-foreground md:text-lg">
             Pesquise disciplinas do SIGAA, veja as turmas abertas do semestre
             vigente e acesse os links dos grupos compartilhados pela comunidade.
             Tudo em um só lugar, sem precisar de conta.
           </p>
 
-          {/* SearchBar precisa de Suspense pois usa useSearchParams internamente */}
-          <div className="mt-8 max-w-2xl">
+          <div className="mt-8">
             <Suspense fallback={<SearchBarSkeleton />}>
-              {/* <SearchBar defaultValue={query} /> */}
               <SearchBar
                 defaultValue={query}
                 defaultDepartamento={departamentoSelecionado}
+                defaultApenasComGrupos={apenasComGrupos}
                 departamentos={departamentos}
               />
             </Suspense>
           </div>
         </section>
 
-        {/* Listagem — Server Component re-renderizado a cada mudança de URL */}
-        <section className="mt-12" aria-labelledby="resultados-heading">
-          <h2
-            id="resultados-heading"
-            className="mb-6 text-2xl font-bold text-foreground"
+        <section className="mt-10">
+          <div className="mb-5 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+            <div>
+              <h2 className="text-2xl font-semibold">
+                {query.length > 0
+                  ? `Resultados para "${query}"`
+                  : "Disciplinas"}
+              </h2>
+
+              <p className="mt-1 text-sm text-muted-foreground">
+                {departamentoSelecionado
+                  ? `Filtrando por ${departamentoSelecionado}.`
+                  : "Use os filtros para encontrar disciplinas por nome, código ou departamento."}
+              </p>
+            </div>
+          </div>
+
+          <Suspense
+            key={`${query}-${departamentoSelecionado}-${apenasComGrupos}`}
+            fallback={<ListSkeleton />}
           >
-            {query.length > 0 ? `Resultados para "${query}"` : "Disciplinas"}
-          </h2>
-          <Suspense key={query} fallback={<ListSkeleton />}>
-            {/* <DisciplinaList query={query} /> */}
             <DisciplinaList
               query={query}
               departamento={departamentoSelecionado}
+              apenasComGrupos={apenasComGrupos}
             />
           </Suspense>
         </section>
 
-        {/* Como funciona */}
-        <section className="mt-16" aria-labelledby="como-funciona-heading">
-          <h2
-            id="como-funciona-heading"
-            className="mb-6 inline-block rounded-md bg-primary px-3 py-1 text-2xl font-bold text-primary-foreground"
-          >
-            Como funciona
-          </h2>
-          <ul className="grid grid-cols-1 gap-5 md:grid-cols-3">
-            <FeatureCard
-              icon={<Zap className="size-6" aria-hidden="true" />}
-              title="Busca rápida"
-              description="Digite o nome ou código (ex: MATA37) e veja as turmas do semestre vigente instantaneamente."
-            />
-            <FeatureCard
-              icon={<MessageCircle className="size-6" aria-hidden="true" />}
-              title="Links colaborativos"
-              description="Adicione e acesse links de convite do chat.whatsapp.com de forma comunitária."
-              highlighted
-            />
-            <FeatureCard
-              icon={<ShieldCheck className="size-6" aria-hidden="true" />}
-              title="Moderação da comunidade"
-              description="Links com 3 ou mais denúncias são ocultados automaticamente para evitar spam."
-            />
-          </ul>
+        <section className="mt-14 grid gap-4 md:grid-cols-3">
+          <FeatureCard
+            icon={<Zap className="size-5" />}
+            title="Busca rápida"
+            description="Digite o nome ou código da disciplina e veja as turmas do semestre vigente instantaneamente."
+          />
+
+          <FeatureCard
+            icon={<MessageCircle className="size-5" />}
+            title="Links colaborativos"
+            description="Adicione e acesse links de convite do chat.whatsapp.com de forma comunitária."
+            highlighted
+          />
+
+          <FeatureCard
+            icon={<ShieldCheck className="size-5" />}
+            title="Moderação da comunidade"
+            description="Denuncie links expirados, incorretos ou suspeitos para manter o SIGAA Hub útil."
+          />
         </section>
       </main>
-    </div>
+
+      <SiteFooter />
+    </>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Skeletons
-// ---------------------------------------------------------------------------
-
 function SearchBarSkeleton() {
   return (
-    <div className="h-14 w-full animate-pulse rounded-2xl border-2 border-border bg-muted" />
+    <div className="h-32 animate-pulse rounded-3xl border bg-muted/60 md:h-20" />
   );
 }
 
 function ListSkeleton() {
   return (
-    <div
-      className="grid grid-cols-1 gap-4 md:grid-cols-2"
-      aria-label="Carregando disciplinas"
-      aria-busy="true"
-    >
-      {Array.from({ length: 4 }).map((_, i) => (
+    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      {Array.from({ length: 6 }).map((_, i) => (
         <div
           key={i}
-          className="rounded-3xl border-2 border-border bg-card p-6 shadow-positivus"
-        >
-          <div className="flex items-center gap-3">
-            <Loader2
-              className="size-5 animate-spin text-primary"
-              aria-hidden="true"
-            />
-            <span className="h-5 w-2/3 animate-pulse rounded-md bg-muted" />
-          </div>
-          <div className="mt-4 h-4 w-full animate-pulse rounded bg-muted" />
-          <div className="mt-2 h-4 w-3/4 animate-pulse rounded bg-muted" />
-        </div>
+          className="h-56 animate-pulse rounded-3xl border bg-muted/50"
+        />
       ))}
     </div>
   );
 }
-
-// ---------------------------------------------------------------------------
-// FeatureCard
-// ---------------------------------------------------------------------------
 
 function FeatureCard({
   icon,
@@ -154,24 +142,22 @@ function FeatureCard({
   highlighted?: boolean;
 }) {
   return (
-    <li
-      className={`rounded-3xl border-2 border-border p-6 shadow-positivus ${
+    <article
+      className={
         highlighted
-          ? "bg-secondary text-secondary-foreground"
-          : "bg-card text-card-foreground"
-      }`}
+          ? "rounded-3xl border border-primary/20 bg-primary/10 p-5"
+          : "rounded-3xl border bg-card p-5"
+      }
     >
-      <span className="flex size-12 items-center justify-center rounded-full bg-primary text-primary-foreground">
+      <div className="mb-4 flex size-10 items-center justify-center rounded-2xl bg-background">
         {icon}
-      </span>
-      <h3 className="mt-4 text-lg font-bold">{title}</h3>
-      <p
-        className={`mt-2 text-sm leading-relaxed ${
-          highlighted ? "text-secondary-foreground/80" : "text-muted-foreground"
-        }`}
-      >
+      </div>
+
+      <h3 className="font-semibold">{title}</h3>
+
+      <p className="mt-2 text-sm leading-6 text-muted-foreground">
         {description}
       </p>
-    </li>
+    </article>
   );
 }

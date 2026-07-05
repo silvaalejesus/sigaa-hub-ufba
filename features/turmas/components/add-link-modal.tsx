@@ -54,6 +54,7 @@ export function AddLinkModal({ turmaId, codigoTurma }: AddLinkModalProps) {
     formState: { errors },
   } = useForm<AddLinkFormData>({
     resolver: valibotResolver(addLinkSchema),
+    mode: 'onChange',
     defaultValues: {
       url: '',
     },

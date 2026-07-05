@@ -1,0 +1,173 @@
+'use client'
+
+import { useState, useTransition } from 'react'
+import { valibotResolver } from '@hookform/resolvers/valibot'
+import { Flag, Loader2 } from 'lucide-react'
+import { useForm } from 'react-hook-form'
+import { toast } from 'sonner'
+import * as v from 'valibot'
+
+import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog'
+import { Textarea } from '@/components/ui/textarea'
+import { denunciarLink } from '@/features/turmas/actions'
+
+const reportSchema = v.object({
+  motivo: v.pipe(
+    v.string(),
+    v.trim(),
+    v.minLength(10, 'Explique o motivo com pelo menos 10 caracteres.'),
+    v.maxLength(150, 'O motivo deve ter no máximo 150 caracteres.'),
+  ),
+})
+
+type ReportFormData = v.InferInput<typeof reportSchema>
+
+interface ReportModalProps {
+  linkId: string
+  codigoTurma: string
+}
+
+export function ReportModal({ linkId, codigoTurma }: ReportModalProps) {
+  const [open, setOpen] = useState(false)
+  const [isPending, startTransition] = useTransition()
+
+  const {
+    register,
+    handleSubmit,
+    reset,
+    clearErrors,
+    watch,
+    setError,
+    formState: { errors, isValid },
+  } = useForm<ReportFormData>({
+    resolver: valibotResolver(reportSchema),
+    mode: 'onChange',
+    defaultValues: {
+      motivo: '',
+    },
+  })
+
+  const motivo = watch('motivo') ?? ''
+  const remaining = 150 - motivo.length
+
+  function handleOpenChange(nextOpen: boolean) {
+    if (isPending) {
+      return
+    }
+
+    setOpen(nextOpen)
+
+    if (!nextOpen) {
+      reset()
+      clearErrors()
+    }
+  }
+
+  function onSubmit(data: ReportFormData) {
+    startTransition(async () => {
+      const result = await denunciarLink(linkId, data.motivo)
+
+      if (!result.ok) {
+        setError('root', {
+          type: 'server',
+          message: result.message,
+        })
+
+        toast.error(result.message)
+        return
+      }
+
+      toast.success(result.message)
+      reset()
+      clearErrors()
+      setOpen(false)
+    })
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogTrigger asChild>
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          title="Denunciar link"
+          aria-label={`Denunciar link da turma ${codigoTurma}`}
+          className="size-9 text-muted-foreground hover:text-destructive"
+        >
+          <Flag className="size-4" />
+        </Button>
+      </DialogTrigger>
+
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Denunciar link da turma {codigoTurma}</DialogTitle>
+          <DialogDescription>
+            Ajude a comunidade informando por que este link deve ser revisado.
+          </DialogDescription>
+        </DialogHeader>
+
+        <form className="space-y-4" onSubmit={handleSubmit(onSubmit)}>
+          <div className="space-y-2">
+            <label htmlFor={`report-${linkId}`} className="text-sm font-medium">
+              Motivo da denúncia
+            </label>
+
+            <Textarea
+              id={`report-${linkId}`}
+              placeholder="Ex: link expirado, grupo incorreto, spam..."
+              maxLength={150}
+              disabled={isPending}
+              aria-invalid={Boolean(errors.motivo)}
+              {...register('motivo')}
+            />
+
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                {errors.motivo?.message && (
+                  <p className="text-sm text-destructive">
+                    {errors.motivo.message}
+                  </p>
+                )}
+
+                {errors.root?.message && (
+                  <p className="text-sm text-destructive">
+                    {errors.root.message}
+                  </p>
+                )}
+              </div>
+
+              <p className="shrink-0 text-xs text-muted-foreground">
+                {remaining} caracteres
+              </p>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={isPending}
+              onClick={() => handleOpenChange(false)}
+            >
+              Cancelar
+            </Button>
+
+            <Button type="submit" variant="destructive" disabled={!isValid || isPending}>
+              {isPending && <Loader2 className="size-4 animate-spin" />}
+              Enviar denúncia
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
