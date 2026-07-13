@@ -41,7 +41,13 @@ interface CommandItemProps extends React.ButtonHTMLAttributes<HTMLButtonElement>
   onSelect?: (value: string) => void
 }
 
-function CommandItem({ className, value = '', onSelect, children, ...props }: CommandItemProps) {
+function CommandItem({
+  className,
+  value = '',
+  onSelect,
+  children,
+  ...props
+}: CommandItemProps) {
   return (
     <button
       type="button"

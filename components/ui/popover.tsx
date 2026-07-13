@@ -57,7 +57,7 @@ function PopoverTrigger({ asChild, children }: PopoverTriggerProps) {
   const { open, setOpen } = usePopover()
 
   if (asChild && React.isValidElement(children)) {
-    const child = children as React.ReactElement<Record<string, unknown>>
+    const child = children as React.ReactElement<any>
 
     return React.cloneElement(child, {
       onClick: (event: React.MouseEvent) => {

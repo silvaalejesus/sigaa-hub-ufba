@@ -1,6 +1,7 @@
 import { MessageCircle, ShieldCheck, Zap } from "lucide-react";
 import { Suspense } from "react";
 
+import { BackToTop } from "@/components/back-to-top";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { DisciplinaList } from "@/features/disciplinas/components/disciplina-list";
@@ -27,7 +28,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     <>
       <SiteHeader />
 
-      <main className="mx-auto w-full max-w-6xl px-4 py-8">
+      <main id="top" className="mx-auto w-full max-w-6xl px-4 py-8">
         <section className="rounded-[2rem] border bg-gradient-to-br from-background via-background to-muted/70 p-6 shadow-sm md:p-10">
           <p className="mb-4 inline-flex rounded-full bg-primary/10 px-3 py-1 text-sm font-semibold text-primary">
             UFBA · Semestre 2026.1
@@ -107,14 +108,13 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       </main>
 
       <SiteFooter />
+      <BackToTop />
     </>
   );
 }
 
 function SearchBarSkeleton() {
-  return (
-    <div className="h-32 animate-pulse rounded-3xl border bg-muted/60 md:h-20" />
-  );
+  return <div className="h-40 animate-pulse rounded-3xl border bg-muted/60" />;
 }
 
 function ListSkeleton() {
