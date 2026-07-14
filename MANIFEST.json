@@ -1,0 +1,32 @@
+{
+  "generated_at": "2026-07-13",
+  "project": "SIGAA Hub UFBA",
+  "source_repository": "silvaalejesus/sigaa-hub-ufba",
+  "note": "README_PROPOSED.md deve ser revisado antes de substituir README.md.",
+  "files": [
+    "AGENTS.md",
+    "CHANGELOG.md",
+    "CONTRIBUTING.md",
+    "LICENSE_GUIDE.md",
+    "README_PROPOSED.md",
+    "docs/API.md",
+    "docs/ARCHITECTURE.md",
+    "docs/BACKEND.md",
+    "docs/DATABASE.md",
+    "docs/DEPLOY.md",
+    "docs/FEATURES.md",
+    "docs/FRONTEND.md",
+    "docs/OBSERVABILITY.md",
+    "docs/RLS.md",
+    "docs/ROADMAP.md",
+    "docs/SCRAPER.md",
+    "docs/SECURITY.md",
+    "docs/STYLE_GUIDE.md",
+    "docs/TESTING.md",
+    "docs/adr/0001-server-components-por-padrao.md",
+    "docs/adr/0002-sentry-como-observabilidade-inicial.md",
+    "docs/adr/0003-sem-gtm-na-fase-inicial.md",
+    "docs/adr/0004-importacao-csv-com-preview.md",
+    "docs/adr/README.md"
+  ]
+}

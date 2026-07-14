@@ -1,33 +1,63 @@
-# sigaa-hub-ufba
+# SIGAA Hub UFBA
 
-This is a [Next.js](https://nextjs.org) project bootstrapped with [v0](https://v0.app).
+Plataforma colaborativa para localizar turmas do semestre vigente e compartilhar links de grupos de WhatsApp.
 
-## Built with v0
+> Projeto independente, sem vínculo oficial com a Universidade Federal da Bahia, com o SIGAA ou com a Meta/WhatsApp.
 
-This repository is linked to a [v0](https://v0.app) project. You can continue developing by visiting the link below -- start new chats to make changes, and v0 will push commits directly to this repo. Every merge to `main` will automatically deploy.
+## Estado do projeto
 
-[Continue working on v0 →](https://v0.app/chat/projects/prj_A2KaRQARBOIQkfyIN8iBKevEWRQP)
+O projeto está em desenvolvimento. A aplicação já possui uma base em Next.js, integração com Supabase, componentes de interface, scraper isolado e deploy na Vercel. Funcionalidades de observabilidade, segurança adicional, importação CSV e administração estão documentadas no roadmap.
 
-## Getting Started
+## Tecnologias
 
-First, run the development server:
+- Next.js e React
+- TypeScript
+- Tailwind CSS e Shadcn UI
+- React Hook Form e Valibot
+- Supabase/PostgreSQL com RLS
+- Python e Playwright
+- Vercel
+
+## Desenvolvimento local
+
+Consulte [`SETUP.md`](./SETUP.md) para as instruções atualmente mantidas no repositório e [`docs/DEPLOY.md`](./docs/DEPLOY.md) para ambientes e deploy.
+
+Comandos principais:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
+pnpm install
 pnpm dev
+pnpm lint
+pnpm build
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Regras centrais
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- leitura pública;
+- somente links `https://chat.whatsapp.com/`;
+- um link ativo por turma;
+- denúncia com motivo entre 10 e 150 caracteres;
+- desativação automática no terceiro reporte;
+- exibição apenas do semestre vigente.
 
-## Learn More
+## Documentação
 
-To learn more, take a look at the following resources:
+- [Arquitetura](./docs/ARCHITECTURE.md)
+- [Front-end](./docs/FRONTEND.md)
+- [Back-end](./docs/BACKEND.md)
+- [Banco de dados](./docs/DATABASE.md)
+- [RLS](./docs/RLS.md)
+- [Segurança](./docs/SECURITY.md)
+- [Observabilidade](./docs/OBSERVABILITY.md)
+- [Scraper](./docs/SCRAPER.md)
+- [Testes](./docs/TESTING.md)
+- [Roadmap](./docs/ROADMAP.md)
+- [Decisões arquiteturais](./docs/adr/README.md)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-- [v0 Documentation](https://v0.app/docs) - learn about v0 and how to use it.
+## Contribuição
+
+Leia [`CONTRIBUTING.md`](./CONTRIBUTING.md) e [`AGENTS.md`](./AGENTS.md) antes de alterar o projeto.
+
+## Licença
+
+A licença ainda deve ser escolhida explicitamente pela mantenedora. Consulte `LICENSE_GUIDE.md`.
