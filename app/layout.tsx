@@ -1,13 +1,16 @@
 import { Analytics } from '@vercel/analytics/next'
 import type { Metadata, Viewport } from 'next'
-import { Space_Grotesk, Geist_Mono } from 'next/font/google'
+import { Geist_Mono, Space_Grotesk } from 'next/font/google'
+
 import { ThemeProvider } from '@/components/theme-provider'
+
 import './globals.css'
 
 const spaceGrotesk = Space_Grotesk({
   variable: '--font-space-grotesk',
   subsets: ['latin'],
 })
+
 const geistMono = Geist_Mono({
   variable: '--font-geist-mono',
   subsets: ['latin'],
@@ -36,7 +39,7 @@ export default function RootLayout({
   return (
     <html
       lang="pt-BR"
-      className={`${spaceGrotesk.variable} ${geistMono.variable}`}
+      className={`${spaceGrotesk.variable} ${geistMono.variable} scroll-smooth motion-reduce:scroll-auto`}
       suppressHydrationWarning
     >
       <body className="font-sans antialiased">

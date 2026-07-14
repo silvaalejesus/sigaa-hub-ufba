@@ -1,6 +1,6 @@
 /**
  * Tipos TypeScript derivados do schema do SIGAA Hub.
- * Reflectem exatamente as tabelas criadas no Supabase.
+ * Refletem as tabelas e funções utilizadas pela aplicação no Supabase.
  */
 export interface Database {
   public: {
@@ -20,9 +20,29 @@ export interface Database {
         Insert: Pick<Link, 'turma_id' | 'url_whatsapp'>
         Update: Partial<Omit<Link, 'id' | 'created_at'>>
       }
+      link_reports: {
+        Row: LinkReport
+        Insert: Omit<LinkReport, 'id' | 'created_at'> & {
+          id?: string
+          created_at?: string
+        }
+        Update: Partial<
+          Omit<LinkReport, 'id' | 'link_id' | 'created_at'>
+        >
+      }
     }
     Views: Record<string, never>
-    Functions: Record<string, never>
+    Functions: {
+      incrementar_reports_link: {
+        Args: {
+          p_link_id: string
+          p_motivo: string
+          p_reporter_fingerprint: string | null
+          p_country_code: string | null
+        }
+        Returns: undefined
+      }
+    }
     Enums: Record<string, never>
   }
 }
@@ -53,7 +73,18 @@ export interface Link {
   created_at: string
 }
 
+export interface LinkReport {
+  id: string
+  link_id: string
+  motivo: string
+  reporter_fingerprint: string | null
+  country_code: string | null
+  created_at: string
+}
+
 /** Tipo enriquecido retornado pelas queries de listagem. */
 export interface DisciplinaComTurmas extends Disciplina {
-  turmas: (Turma & { links: Pick<Link, 'id' | 'url_whatsapp'>[] })[]
+  turmas: (Turma & {
+    links: Pick<Link, 'id' | 'url_whatsapp' | 'is_active'>[]
+  })[]
 }

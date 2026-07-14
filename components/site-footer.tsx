@@ -2,6 +2,7 @@ import { MessageSquareHeart } from "lucide-react";
 import Link from "next/link";
 
 import { FeedbackForm } from "@/components/feedback-form";
+
 import { Github, Linkedin } from "./ui/brand-icons";
 
 const usefulLinks = [
@@ -26,8 +27,8 @@ export function SiteFooter() {
     <footer id="footer" className="mt-16 scroll-mt-24 border-t bg-muted/30">
       <div className="mx-auto grid w-full max-w-6xl gap-10 px-4 py-10 md:grid-cols-[1fr_1fr]">
         <div className="space-y-6">
-          <div>
-            <p className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-sm font-semibold text-primary">
+          <section id="sobre" className="scroll-mt-24">
+            <p className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-sm font-semibold text-emerald-700 dark:border-primary/20 dark:bg-primary/10 dark:text-primary">
               <MessageSquareHeart className="size-4" />
               SIGAA Hub UFBA
             </p>
@@ -36,10 +37,17 @@ export function SiteFooter() {
               Projeto colaborativo para ajudar estudantes a encontrar e
               compartilhar grupos de WhatsApp das turmas.
             </p>
-          </div>
+          </section>
 
-          <div>
-            <h3 className="text-sm font-semibold">Links úteis</h3>
+          <nav
+            id="links-uteis"
+            aria-labelledby="links-uteis-title"
+            className="scroll-mt-24"
+          >
+            <h3 id="links-uteis-title" className="text-sm font-semibold">
+              Links úteis
+            </h3>
+
             <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
               {usefulLinks.map((item) => (
                 <li key={item.label}>
@@ -49,10 +57,11 @@ export function SiteFooter() {
                 </li>
               ))}
             </ul>
-          </div>
+          </nav>
 
           <div className="space-y-3 text-sm text-muted-foreground">
             <p>© {currentYear} SIGAA Hub UFBA.</p>
+
             <p>
               Desenvolvido por{" "}
               <span className="font-medium text-foreground">
@@ -81,9 +90,16 @@ export function SiteFooter() {
           </div>
         </div>
 
-        <div className="rounded-3xl border bg-background p-5 shadow-sm">
+        <section
+          id="feedback"
+          aria-labelledby="feedback-title"
+          className="scroll-mt-24 rounded-3xl border bg-background p-5 shadow-sm"
+        >
           <div className="mb-4">
-            <h3 className="text-base font-semibold">Feedback e sugestões</h3>
+            <h3 id="feedback-title" className="text-base font-semibold">
+              Feedback e sugestões
+            </h3>
+
             <p className="mt-1 text-sm text-muted-foreground">
               Encontrou algum problema ou tem uma ideia para melhorar a
               plataforma?
@@ -91,7 +107,7 @@ export function SiteFooter() {
           </div>
 
           <FeedbackForm />
-        </div>
+        </section>
       </div>
     </footer>
   );

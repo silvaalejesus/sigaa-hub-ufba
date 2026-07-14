@@ -18,7 +18,6 @@ interface HomePageProps {
 
 export default async function HomePage({ searchParams }: HomePageProps) {
   const { q, departamento, grupos } = await searchParams;
-
   const query = q?.trim() ?? "";
   const departamentoSelecionado = departamento?.trim() ?? "";
   const apenasComGrupos = grupos === "1";
@@ -30,7 +29,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
 
       <main id="top" className="mx-auto w-full max-w-6xl px-4 py-8">
         <section className="rounded-[2rem] border bg-gradient-to-br from-background via-background to-muted/70 p-6 shadow-sm md:p-10">
-          <p className="mb-4 inline-flex rounded-full bg-primary/10 px-3 py-1 text-sm font-semibold text-primary">
+          <p className="mb-4 inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-sm font-semibold text-emerald-700 dark:border-primary/20 dark:bg-primary/10 dark:text-primary">
             UFBA · Semestre 2026.1
           </p>
 
@@ -145,17 +144,29 @@ function FeatureCard({
     <article
       className={
         highlighted
-          ? "rounded-3xl border border-primary/20 bg-primary/10 p-5"
+          ? "rounded-3xl border border-primary/40 bg-primary/50 p-5 text-primary-foreground dark:border-primary/20 dark:bg-primary/10 dark:text-foreground"
           : "rounded-3xl border bg-card p-5"
       }
     >
-      <div className="mb-4 flex size-10 items-center justify-center rounded-2xl bg-background">
+      <div
+        className={
+          highlighted
+            ? "mb-4 flex size-10 items-center justify-center rounded-2xl bg-background/80 text-foreground dark:bg-background"
+            : "mb-4 flex size-10 items-center justify-center rounded-2xl bg-background"
+        }
+      >
         {icon}
       </div>
 
       <h3 className="font-semibold">{title}</h3>
 
-      <p className="mt-2 text-sm leading-6 text-muted-foreground">
+      <p
+        className={
+          highlighted
+            ? "mt-2 text-sm leading-6 text-primary-foreground/80 dark:text-muted-foreground"
+            : "mt-2 text-sm leading-6 text-muted-foreground"
+        }
+      >
         {description}
       </p>
     </article>

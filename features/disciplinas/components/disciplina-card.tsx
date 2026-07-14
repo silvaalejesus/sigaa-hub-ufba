@@ -48,12 +48,12 @@ export function DisciplinaCard({ disciplina }: DisciplinaCardProps) {
       <article className="flex h-full flex-col justify-between rounded-3xl border bg-card p-5 shadow-sm transition-colors hover:border-primary/30 hover:bg-muted/20">
         <div className="space-y-4">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-bold tracking-wide text-primary">
+            <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold tracking-wide text-emerald-700 dark:border-primary/20 dark:bg-primary/10 dark:text-primary">
               {disciplina.codigo}
             </span>
 
             {disciplina.departamento && (
-              <span className="line-clamp-1 rounded-full border px-3 py-1 text-xs text-muted-foreground">
+              <span className="min-w-0 max-w-full whitespace-normal break-words rounded-2xl border px-3 py-1 text-wrap text-xs leading-normal text-muted-foreground [overflow-wrap:anywhere]">
                 {disciplina.departamento}
               </span>
             )}
@@ -102,13 +102,20 @@ export function DisciplinaCard({ disciplina }: DisciplinaCardProps) {
       >
         <DialogContent className="max-w-3xl">
           <DialogHeader>
-            <DialogTitle>
+            <DialogTitle className="text-wrap break-words leading-snug [overflow-wrap:anywhere]">
               {disciplina.codigo} · {disciplina.nome}
             </DialogTitle>
+
             <DialogDescription>
               Veja as turmas disponíveis e acesse ou contribua com os links dos
               grupos.
             </DialogDescription>
+
+            {disciplina.departamento && (
+              <p className="max-w-full whitespace-normal break-words text-wrap text-sm leading-normal text-muted-foreground [overflow-wrap:anywhere]">
+                {disciplina.departamento}
+              </p>
+            )}
           </DialogHeader>
 
           <div className="rounded-2xl bg-muted/40 px-4 py-3 text-sm text-muted-foreground">

@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
 import { ArrowUp } from 'lucide-react'
+import { useEffect, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -21,6 +21,7 @@ export function BackToTop() {
   }, [])
 
   function scrollToTop() {
+    window.history.replaceState(null, '', window.location.pathname)
     window.scrollTo({
       top: 0,
       behavior: 'smooth',
