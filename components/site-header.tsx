@@ -1,57 +1,44 @@
 import Link from 'next/link'
 
 import { Logo } from '@/components/logo'
+import { MobileNavigation } from '@/components/mobile-navigation'
+import { SITE_NAVIGATION_ITEMS } from '@/components/site-navigation'
 import { ThemeToggle } from '@/components/theme-toggle'
-
-const navigationItems = [
-  {
-    label: 'Links úteis',
-    compactLabel: 'Links',
-    href: '#links-uteis',
-  },
-  {
-    label: 'Sobre',
-    compactLabel: 'Sobre',
-    href: '#sobre',
-  },
-  {
-    label: 'Feedback e sugestões',
-    compactLabel: 'Feedback',
-    href: '#feedback',
-  },
-] as const
 
 export function SiteHeader() {
   return (
     <header className="sticky top-0 z-40 border-b bg-background/80 backdrop-blur">
-      <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between gap-2 px-4">
-        <Link href="/" className="flex shrink-0 items-center gap-3">
+      <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between gap-3 px-4">
+        <Link
+          href="/"
+          className="flex min-w-0 shrink items-center gap-3 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
           <Logo />
-          <span className="hidden text-sm font-medium text-muted-foreground xl:inline">
+
+          <span className="hidden shrink-0 text-sm font-medium text-muted-foreground xl:inline">
             UFBA · 2026.1
           </span>
         </Link>
 
-        <nav
-          aria-label="Navegação da página"
-          className="flex min-w-0 items-center gap-1"
-        >
-          {navigationItems.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              aria-label={item.label}
-              className="inline-flex h-9 shrink-0 items-center rounded-full px-2 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:px-3 sm:text-sm"
-            >
-              <span className="hidden lg:inline">{item.label}</span>
-              <span aria-hidden="true" className="lg:hidden">
-                {item.compactLabel}
-              </span>
-            </Link>
-          ))}
+        <div className="flex shrink-0 items-center gap-1">
+          <nav
+            aria-label="Navegação principal"
+            className="hidden items-center gap-1 lg:flex"
+          >
+            {SITE_NAVIGATION_ITEMS.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className="inline-flex h-9 items-center rounded-full px-3 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                {item.label}
+              </Link>
+            ))}
+          </nav>
 
           <ThemeToggle />
-        </nav>
+          <MobileNavigation />
+        </div>
       </div>
     </header>
   )

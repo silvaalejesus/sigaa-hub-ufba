@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { usePathname, useRouter } from 'next/navigation'
+
 import {
   Building2,
   Check,
@@ -10,6 +10,7 @@ import {
   UsersRound,
   X,
 } from 'lucide-react'
+import { usePathname, useRouter } from 'next/navigation'
 
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -43,7 +44,7 @@ export function SearchBar({
   defaultDepartamento = '',
   defaultApenasComGrupos = false,
   departamentos = [],
-  placeholder = 'Busque por nome ou código da disciplina (ex: MATA37)',
+  placeholder = 'Busque por nome ou código (ex: MATA37)',
 }: SearchBarProps) {
   const router = useRouter()
   const pathname = usePathname()
@@ -66,7 +67,9 @@ export function SearchBar({
       return departamentos
     }
 
-    return departamentos.filter((item) => item.toLowerCase().includes(search))
+    return departamentos.filter((item) =>
+      item.toLowerCase().includes(search),
+    )
   }, [departamentoSearch, departamentos])
 
   function syncUrl(nextValues: {
@@ -78,7 +81,8 @@ export function SearchBar({
 
     const nextQuery = nextValues.q ?? term
     const nextDepartamento = nextValues.departamento ?? departamento
-    const nextApenasComGrupos = nextValues.apenasComGrupos ?? apenasComGrupos
+    const nextApenasComGrupos =
+      nextValues.apenasComGrupos ?? apenasComGrupos
 
     if (nextQuery.trim().length > 0) {
       params.set('q', nextQuery.trim())
@@ -106,7 +110,6 @@ export function SearchBar({
     }
 
     syncUrl({ q: debouncedTerm })
-
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedTerm, pathname, router])
 
@@ -128,24 +131,26 @@ export function SearchBar({
   }
 
   return (
-    <div className="rounded-3xl border bg-background/80 p-4 shadow-sm backdrop-blur">
-      <div className="space-y-4">
+    <div className="min-w-0 rounded-3xl border bg-background/80 p-3 shadow-sm backdrop-blur sm:p-4">
+      <div className="min-w-0 space-y-3 sm:space-y-4">
         <form
           onSubmit={(event) => event.preventDefault()}
-          className="relative w-full rounded-2xl border bg-background"
+          className="relative min-w-0 overflow-hidden rounded-2xl border bg-background"
         >
           <label htmlFor="disciplina-search" className="sr-only">
             Buscar disciplina
           </label>
 
-          <Search className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-muted-foreground" />
+          <Search className="pointer-events-none absolute left-3.5 top-1/2 size-5 -translate-y-1/2 text-muted-foreground sm:left-4" />
 
           <Input
             id="disciplina-search"
             value={term}
             onChange={(event) => setTerm(event.target.value)}
             placeholder={placeholder}
-            className="h-12 border-0 bg-transparent pl-12 pr-12 text-base shadow-none focus-visible:ring-0"
+            autoComplete="off"
+            enterKeyHint="search"
+            className="h-12 min-w-0 border-0 bg-transparent pl-10 pr-11 text-sm shadow-none focus-visible:ring-0 sm:pl-12 sm:pr-12 sm:text-base"
           />
 
           {term.length > 0 && (
@@ -154,7 +159,7 @@ export function SearchBar({
               variant="ghost"
               size="icon"
               aria-label="Limpar busca"
-              className="absolute right-2 top-1/2 -translate-y-1/2"
+              className="absolute right-1.5 top-1/2 size-9 -translate-y-1/2 sm:right-2"
               onClick={handleClear}
             >
               <X className="size-4" />
@@ -162,31 +167,42 @@ export function SearchBar({
           )}
         </form>
 
-        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
-          <Popover open={openDepartamento} onOpenChange={setOpenDepartamento}>
+        <div className="grid min-w-0 gap-3 xl:grid-cols-[minmax(0,1fr)_auto]">
+          <Popover
+            open={openDepartamento}
+            onOpenChange={setOpenDepartamento}
+          >
             <PopoverTrigger asChild>
               <Button
                 type="button"
                 variant="outline"
-                className="h-auto min-h-12 justify-between gap-3 rounded-2xl px-4 py-3 text-left"
+                className="h-auto min-h-14 w-full min-w-0 max-w-full justify-between gap-3 overflow-hidden whitespace-normal rounded-2xl px-4 py-3 text-left"
                 aria-expanded={openDepartamento}
+                aria-label="Selecionar instituto ou departamento"
               >
-                <span className="flex min-w-0 items-center gap-3">
+                <span className="flex min-w-0 flex-1 items-center gap-3">
                   <Building2 className="size-4 shrink-0 text-muted-foreground" />
-                  <span className="min-w-0">
-                    <span className="block text-xs text-muted-foreground">
+
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-xs font-normal text-muted-foreground">
                       Instituto/Departamento
                     </span>
-                    <span className="block truncate text-sm font-medium">
+
+                    <span className="mt-0.5 line-clamp-2 block break-words text-sm font-medium leading-snug">
                       {departamento || 'Todos'}
                     </span>
                   </span>
                 </span>
+
                 <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground" />
               </Button>
             </PopoverTrigger>
 
-            <PopoverContent className="w-[min(92vw,460px)] p-0" align="start">
+            <PopoverContent
+              className="w-[calc(100vw-3rem)] max-w-[460px] p-0 sm:w-[460px]"
+              align="start"
+              sideOffset={8}
+            >
               <Command>
                 <CommandInput
                   value={departamentoSearch}
@@ -202,11 +218,14 @@ export function SearchBar({
                     >
                       <Check
                         className={cn(
-                          'size-4',
+                          'size-4 shrink-0',
                           departamento === '' ? 'opacity-100' : 'opacity-0',
                         )}
                       />
-                      Todos os institutos/departamentos
+
+                      <span className="min-w-0 whitespace-normal break-words">
+                        Todos os institutos/departamentos
+                      </span>
                     </CommandItem>
 
                     {departamentosFiltrados.map((item) => (
@@ -218,30 +237,42 @@ export function SearchBar({
                         <Check
                           className={cn(
                             'size-4 shrink-0',
-                            departamento === item ? 'opacity-100' : 'opacity-0',
+                            departamento === item
+                              ? 'opacity-100'
+                              : 'opacity-0',
                           )}
                         />
-                        <span className="truncate">{item}</span>
+
+                        <span className="min-w-0 whitespace-normal break-words leading-snug">
+                          {item}
+                        </span>
                       </CommandItem>
                     ))}
                   </CommandGroup>
 
                   {departamentosFiltrados.length === 0 && (
-                    <CommandEmpty>Nenhum departamento encontrado.</CommandEmpty>
+                    <CommandEmpty>
+                      Nenhum departamento encontrado.
+                    </CommandEmpty>
                   )}
                 </CommandList>
               </Command>
             </PopoverContent>
           </Popover>
 
-          <label className="flex min-h-12 cursor-pointer items-center gap-3 rounded-2xl border bg-background px-4 py-3 text-sm">
+          <label className="flex min-h-14 w-full min-w-0 cursor-pointer items-center gap-3 rounded-2xl border bg-background px-4 py-3 text-sm xl:w-auto">
             <Checkbox
               checked={apenasComGrupos}
               onCheckedChange={handleApenasComGruposChange}
               aria-label="Filtrar apenas disciplinas com grupos disponíveis"
+              className="shrink-0"
             />
-            <UsersRound className="size-4 text-muted-foreground" />
-            <span className="font-medium">Apenas com grupos disponíveis</span>
+
+            <UsersRound className="size-4 shrink-0 text-muted-foreground" />
+
+            <span className="min-w-0 whitespace-normal break-words font-medium leading-snug">
+              Apenas com grupos disponíveis
+            </span>
           </label>
         </div>
       </div>
