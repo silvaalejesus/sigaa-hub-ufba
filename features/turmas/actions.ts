@@ -1,16 +1,15 @@
 'use server'
 
 import { createHmac } from 'node:crypto'
-
 import { revalidatePath } from 'next/cache'
 import { headers } from 'next/headers'
 import * as v from 'valibot'
 
+import { captureUnexpectedError } from '@/lib/observability/capture-unexpected-error'
 import { createClient } from '@/lib/supabase/server'
 
 const WHATSAPP_INVITE_REGEX =
   /^https:\/\/chat\.whatsapp\.com\/[A-Za-z0-9_-]+\/?$/
-
 const COUNTRY_CODE_REGEX = /^[A-Z]{2}$/
 
 const adicionarLinkSchema = v.object({
@@ -60,7 +59,6 @@ function getFirstForwardedIp(headerStore: HeaderReader): string | null {
     headerStore.get('x-vercel-forwarded-for') ??
     headerStore.get('x-forwarded-for') ??
     headerStore.get('x-real-ip')
-
   const firstIp = forwardedFor?.split(',')[0]?.trim()
 
   return firstIp || null
@@ -89,8 +87,7 @@ function createReporterFingerprint(
     return null
   }
 
-  const userAgent =
-    headerStore.get('user-agent')?.trim().slice(0, 512) ?? 'unknown'
+  const userAgent = headerStore.get('user-agent')?.trim().slice(0, 512) ?? 'unknown'
 
   return createHmac('sha256', secret)
     .update(`${clientIp}\n${userAgent}`)
@@ -120,6 +117,10 @@ function getReportErrorMessage(code: string | undefined): string {
   return 'Não foi possível registrar a denúncia. Tente novamente.'
 }
 
+function isExpectedReportError(code: string | undefined): boolean {
+  return ['P0001', 'P0002', '22004', '22023'].includes(code ?? '')
+}
+
 export async function adicionarLink(
   turmaId: string,
   url: string,
@@ -138,6 +139,7 @@ export async function adicionarLink(
     }
 
     const supabase = await createClient()
+
     const { error } = await supabase.from('links').insert({
       turma_id: parsed.output.turmaId,
       url_whatsapp: parsed.output.url,
@@ -159,7 +161,13 @@ export async function adicionarLink(
         }
       }
 
-      console.error('[SIGAA Hub] Erro ao adicionar link:', error)
+      captureUnexpectedError(error, {
+        operation: 'adicionarLink.insert',
+        subsystem: 'supabase',
+        tags: {
+          database_error_code: error.code || 'unknown',
+        },
+      })
 
       return {
         ok: false,
@@ -174,11 +182,14 @@ export async function adicionarLink(
       message: 'Link adicionado com sucesso.',
     }
   } catch (error) {
-    console.error('[SIGAA Hub] Erro inesperado ao adicionar link:', error)
+    captureUnexpectedError(error, {
+      operation: 'adicionarLink',
+      subsystem: 'server-action',
+    })
 
     return {
       ok: false,
-      message: 'Erro inesperado ao adicionar o link.',
+      message: 'Não foi possível adicionar o link. Tente novamente.',
     }
   }
 }
@@ -212,29 +223,21 @@ export async function denunciarLink(
     })
 
     if (error) {
-      console.error(
-        '[SIGAA Hub] Erro ao executar incrementar_reports_link:',
-        {
-          code: error.code,
-          details: error.details,
-          hint: error.hint,
-          message: error.message,
-          linkId: parsed.output.linkId,
-        },
-      )
+      if (!isExpectedReportError(error.code)) {
+        captureUnexpectedError(error, {
+          operation: 'denunciarLink.rpc',
+          subsystem: 'supabase',
+          tags: {
+            database_error_code: error.code || 'unknown',
+          },
+        })
+      }
 
       return {
         ok: false,
         message: getReportErrorMessage(error.code),
       }
     }
-
-    console.info('[SIGAA Hub] Denúncia registrada:', {
-      linkId: parsed.output.linkId,
-      countryCode: metadata.countryCode,
-      hasReporterFingerprint: Boolean(metadata.reporterFingerprint),
-      receivedAt: new Date().toISOString(),
-    })
 
     revalidatePath('/')
 
@@ -243,11 +246,14 @@ export async function denunciarLink(
       message: 'Denúncia registrada com sucesso.',
     }
   } catch (error) {
-    console.error('[SIGAA Hub] Erro inesperado ao denunciar link:', error)
+    captureUnexpectedError(error, {
+      operation: 'denunciarLink',
+      subsystem: 'server-action',
+    })
 
     return {
       ok: false,
-      message: 'Erro inesperado ao registrar denúncia.',
+      message: 'Não foi possível registrar a denúncia. Tente novamente.',
     }
   }
 }

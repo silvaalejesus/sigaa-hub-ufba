@@ -2,6 +2,8 @@
 
 import * as v from 'valibot'
 
+import { captureUnexpectedError } from '@/lib/observability/capture-unexpected-error'
+
 const feedbackSchema = v.object({
   nome: v.pipe(
     v.string(),
@@ -47,15 +49,22 @@ export async function enviarFeedback(input: {
     }
   }
 
-  await new Promise((resolve) => setTimeout(resolve, 700))
+  try {
+    await new Promise((resolve) => setTimeout(resolve, 700))
 
-  console.log('[SIGAA Hub] Feedback recebido:', {
-    ...parsed.output,
-    receivedAt: new Date().toISOString(),
-  })
+    return {
+      ok: true,
+      message: 'Obrigada! Sua sugestão foi enviada com sucesso.',
+    }
+  } catch (error) {
+    captureUnexpectedError(error, {
+      operation: 'enviarFeedback',
+      subsystem: 'server-action',
+    })
 
-  return {
-    ok: true,
-    message: 'Obrigada! Sua sugestão foi enviada com sucesso.',
+    return {
+      ok: false,
+      message: 'Não foi possível enviar sua sugestão. Tente novamente.',
+    }
   }
 }

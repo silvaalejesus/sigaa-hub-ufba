@@ -17,3 +17,5 @@ node_modules
 venv
 *.yaml
 *.lock.*
+# Sentry Config File
+.env.sentry-build-plugin

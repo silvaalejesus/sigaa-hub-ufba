@@ -1,37 +1,49 @@
 /**
  * Tipos TypeScript derivados do schema do SIGAA Hub.
- * Refletem as tabelas e funções utilizadas pela aplicação no Supabase.
+ *
+ * Reflectem as tabelas consumidas pelo front-end e a RPC usada para denúncias.
  */
-export interface Database {
+export type Database = {
   public: {
     Tables: {
       disciplinas: {
         Row: Disciplina
         Insert: Omit<Disciplina, 'id' | 'created_at'>
         Update: Partial<Omit<Disciplina, 'id' | 'created_at'>>
+        Relationships: []
       }
       turmas: {
         Row: Turma
         Insert: Omit<Turma, 'id' | 'created_at'>
         Update: Partial<Omit<Turma, 'id' | 'created_at'>>
+        Relationships: [
+          {
+            foreignKeyName: 'turmas_disciplina_fk'
+            columns: ['disciplina_id']
+            isOneToOne: false
+            referencedRelation: 'disciplinas'
+            referencedColumns: ['id']
+          },
+        ]
       }
       links: {
         Row: Link
         Insert: Pick<Link, 'turma_id' | 'url_whatsapp'>
         Update: Partial<Omit<Link, 'id' | 'created_at'>>
-      }
-      link_reports: {
-        Row: LinkReport
-        Insert: Omit<LinkReport, 'id' | 'created_at'> & {
-          id?: string
-          created_at?: string
-        }
-        Update: Partial<
-          Omit<LinkReport, 'id' | 'link_id' | 'created_at'>
-        >
+        Relationships: [
+          {
+            foreignKeyName: 'links_turma_fk'
+            columns: ['turma_id']
+            isOneToOne: false
+            referencedRelation: 'turmas'
+            referencedColumns: ['id']
+          },
+        ]
       }
     }
-    Views: Record<string, never>
+    Views: {
+      [_ in never]: never
+    }
     Functions: {
       incrementar_reports_link: {
         Args: {
@@ -43,11 +55,16 @@ export interface Database {
         Returns: undefined
       }
     }
-    Enums: Record<string, never>
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
   }
 }
 
-export interface Disciplina {
+export type Disciplina = {
   id: string
   codigo: string
   nome: string
@@ -55,7 +72,7 @@ export interface Disciplina {
   created_at: string
 }
 
-export interface Turma {
+export type Turma = {
   id: string
   disciplina_id: string
   codigo_turma: string
@@ -64,7 +81,7 @@ export interface Turma {
   created_at: string
 }
 
-export interface Link {
+export type Link = {
   id: string
   turma_id: string
   url_whatsapp: string
@@ -73,18 +90,7 @@ export interface Link {
   created_at: string
 }
 
-export interface LinkReport {
-  id: string
-  link_id: string
-  motivo: string
-  reporter_fingerprint: string | null
-  country_code: string | null
-  created_at: string
-}
-
 /** Tipo enriquecido retornado pelas queries de listagem. */
-export interface DisciplinaComTurmas extends Disciplina {
-  turmas: (Turma & {
-    links: Pick<Link, 'id' | 'url_whatsapp' | 'is_active'>[]
-  })[]
+export type DisciplinaComTurmas = Disciplina & {
+  turmas: (Turma & { links: Pick<Link, 'id' | 'url_whatsapp'>[] })[]
 }

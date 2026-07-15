@@ -1,9 +1,9 @@
-import Link from 'next/link'
+import Link from "next/link";
 
-import { Logo } from '@/components/logo'
-import { MobileNavigation } from '@/components/mobile-navigation'
-import { SITE_NAVIGATION_ITEMS } from '@/components/site-navigation'
-import { ThemeToggle } from '@/components/theme-toggle'
+import { Logo } from "@/components/logo";
+import { MobileNavigation } from "@/components/mobile-navigation";
+import { SITE_NAVIGATION_ITEMS } from "@/components/site-navigation";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export function SiteHeader() {
   return (
@@ -19,7 +19,6 @@ export function SiteHeader() {
             UFBA · 2026.1
           </span>
         </Link>
-
         <div className="flex shrink-0 items-center gap-1">
           <nav
             aria-label="Navegação principal"
@@ -41,5 +40,5 @@ export function SiteHeader() {
         </div>
       </div>
     </header>
-  )
+  );
 }
