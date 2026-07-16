@@ -1,94 +1,60 @@
 # Banco de dados
 
-Este documento descreve o modelo lógico esperado. Os nomes reais das tabelas e colunas devem ser confirmados pelas migrations existentes antes de qualquer alteração.
+## Modelo real
 
-## Entidades principais
+O schema atual usa:
 
-### Departamentos
+- `public.disciplinas`: `id`, `codigo`, `nome`, `departamento`, `created_at`;
+- `public.turmas`: `id`, `disciplina_id`, `codigo_turma`, `professor`,
+  `semestre`, `created_at`;
+- `public.links`: `id`, `turma_id`, `url_whatsapp`, `reports`, `is_active`,
+  `created_at`;
+- `public.link_reports`: denúncias, conforme script específico do projeto;
+- `public.scraper_runs`: histórico operacional da coleta e sincronização.
 
-- `id`
-- `code`
-- `name`
-- timestamps
+O semestre segue o formato `AAAA.P`, por exemplo `2026.1`.
 
-### Disciplinas
+## `public.scraper_runs`
 
-- `id`
-- `code`
-- `name`
-- `department_id`
-- timestamps
+| Coluna | Uso |
+| --- | --- |
+| `id` | UUID da execução |
+| `status` | `running`, `success`, `partial` ou `failed` |
+| `trigger_source` | `manual`, `github_actions`, `local` ou `scheduled` |
+| `semester` | semestre coletado |
+| `started_at` / `finished_at` | janela da execução |
+| `departments_processed` | unidades concluídas |
+| `subjects_found` / `classes_found` | contagens da extração |
+| `subjects_upserted` / `classes_upserted` | contagens sincronizadas |
+| `error_code` | código estável e curto |
+| `error_message` | erro sanitizado, limitado a 1.000 caracteres |
+| `metadata` | objeto JSON operacional não sensível |
+| `created_at` | criação da linha |
 
-### Turmas
+Constraints controlam estados, origem, formato do semestre, ordem temporal,
+contadores não negativos e limites de erro. Os índices atendem última execução,
+último sucesso, semestre e status.
 
-- `id`
-- `subject_id`
-- `class_code`
-- `term`
-- dados de horário e docentes quando disponíveis
-- `source_updated_at`
-- timestamps
+## Interface pública
 
-### Links de WhatsApp
+A tabela bruta não possui leitura pública. As funções abaixo expõem somente
+agregados seguros:
 
-- `id`
-- `class_id`
-- `url`
-- `is_active`
-- `reports_count`
-- `inactive_reason`
-- `last_checked_at`
-- timestamps
+- `get_public_scraper_status(text)`;
+- `count_public_subjects(text)`;
+- `count_public_classes(text)`;
+- `count_public_active_links(text)`;
+- `app_health_check()`.
 
-### Denúncias
+## Aplicação da migration
 
-- `id`
-- `link_id`
-- `reason`
-- identificador antispam pseudonimizado, se adotado
-- `created_at`
+Com Supabase CLI:
 
-### Execuções do scraper
-
-- `id`
-- `term`
-- `status`
-- `started_at`
-- `finished_at`
-- contagens de leitura, inserção e atualização
-- mensagem de erro sanitizada
-
-## Constraints essenciais
-
-### Um link ativo por turma
-
-Usar índice único parcial:
-
-```sql
-create unique index if not exists one_active_link_per_class
-on whatsapp_links (class_id)
-where is_active = true;
+```bash
+supabase link --project-ref SEU_PROJECT_REF
+supabase db push
 ```
 
-### URL
-
-A aplicação deve validar o formato. O banco pode adicionar uma constraint defensiva, sem substituir a validação da aplicação.
-
-### Denúncias
-
-A contagem e a desativação devem ser atualizadas atomicamente. Evitar ler o contador e depois atualizá-lo em duas chamadas independentes.
-
-## Auditoria
-
-Campos recomendados:
-
-- `created_at`
-- `updated_at`
-- `last_checked_at`
-- `inactive_reason`
-- `source`
-- `metadata` somente quando houver necessidade real
-
-## Retenção e privacidade
-
-Não armazenar IP bruto indefinidamente. Para antispam, preferir hash com segredo rotativo, retenção curta ou serviço de rate limiting dedicado.
+Ou copie `supabase/migrations/202607140001_scraper_runs_status.sql` para o SQL
+Editor de um ambiente de desenvolvimento, revise e execute antes de produção.
+A migration é aditiva e não remove dados existentes.

@@ -18,6 +18,10 @@ const usefulLinks = [
     label: "Guia de matrícula",
     href: "#",
   },
+  {
+    label: "Status do sistema",
+    href: "/status",
+  },
 ];
 
 export function SiteFooter() {

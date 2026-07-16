@@ -7,6 +7,7 @@ import { SiteHeader } from "@/components/site-header";
 import { DisciplinaList } from "@/features/disciplinas/components/disciplina-list";
 import { SearchBar } from "@/features/disciplinas/components/search-bar";
 import { buscarDepartamentos } from "@/features/disciplinas/queries";
+import { CURRENT_SEMESTER } from "@/lib/semester";
 
 interface HomePageProps {
   searchParams: Promise<{
@@ -30,7 +31,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       <main id="top" className="mx-auto w-full max-w-6xl px-4 py-8">
         <section className="rounded-[2rem] border bg-gradient-to-br from-background via-background to-muted/70 p-6 shadow-sm md:p-10">
           <p className="mb-4 inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-sm font-semibold text-emerald-700 dark:border-primary/20 dark:bg-primary/10 dark:text-primary">
-            UFBA · Semestre 2026.1
+            UFBA · Semestre {CURRENT_SEMESTER}
           </p>
 
           <h1 className="max-w-3xl text-3xl font-bold tracking-tight md:text-5xl">

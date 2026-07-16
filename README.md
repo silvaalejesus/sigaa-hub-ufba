@@ -1,87 +1,57 @@
 # SIGAA Hub UFBA
 
-Plataforma colaborativa para localizar turmas do semestre vigente e compartilhar links de grupos de WhatsApp.
+Plataforma colaborativa para localizar turmas do semestre vigente e compartilhar
+links de grupos de WhatsApp.
 
-> Projeto independente, sem vínculo oficial com a Universidade Federal da Bahia, com o SIGAA ou com a Meta/WhatsApp.
+> Projeto independente, sem vínculo oficial com a Universidade Federal da Bahia,
+> com o SIGAA ou com a Meta/WhatsApp.
 
 ## Estado do projeto
 
-O projeto está em desenvolvimento. A aplicação possui base em Next.js, integração com Supabase, componentes de interface, scraper isolado e deploy na Vercel. A primeira etapa de observabilidade do front-end inclui Sentry, Vercel Analytics e Vercel Speed Insights.
-
-## Tecnologias
-
-- Next.js e React
-- TypeScript
-- Tailwind CSS e Shadcn UI
-- React Hook Form e Valibot
-- Supabase/PostgreSQL com RLS
-- Python e Playwright
-- Vercel
-- Sentry
+A aplicação usa Next.js, Supabase, scraper Python/Playwright e deploy na Vercel.
+A infraestrutura pública de status está disponível em `/status`, com health
+check mínimo em `/api/health`. O scraper registra extração e sincronização em
+`public.scraper_runs`.
 
 ## Desenvolvimento local
 
-Consulte [SETUP.md](./SETUP.md) para as instruções de ambiente e [docs/DEPLOY.md](./docs/DEPLOY.md) para Preview e Production.
-
-Comandos principais:
+Consulte [`SETUP.md`](./SETUP.md) e [`docs/DEPLOY.md`](./docs/DEPLOY.md).
 
 ```bash
 pnpm install
 pnpm dev
 pnpm lint
 pnpm exec tsc --noEmit
+pnpm test
 pnpm build
+python -m compileall scraper
+python -m unittest discover -s scraper/tests
 ```
 
-Copie o arquivo de exemplo antes de iniciar:
+## Banco
 
-```bash
-cp .env.example .env.local
+Aplique primeiro o schema existente e depois as migrations versionadas. Para o
+status operacional:
+
+```text
+supabase/migrations/202607140001_scraper_runs_status.sql
 ```
 
-A coleta do Sentry fica desativada em ambiente local por padrão.
+## Rotas operacionais
 
-## Regras centrais
-
-- leitura pública;
-- somente links `https://chat.whatsapp.com/`;
-- um link ativo por turma;
-- denúncia com motivo entre 10 e 150 caracteres;
-- desativação automática no terceiro reporte;
-- exibição apenas do semestre vigente.
-
-## Observabilidade
-
-- erros de navegador, servidor, Edge Runtime, navegação e App Router com Sentry;
-- captura apenas de falhas inesperadas nas Server Actions;
-- sanitização de dados sensíveis antes do envio;
-- traces com taxa configurável e conservadora;
-- source maps preparados para builds de produção;
-- Vercel Analytics preservado;
-- Vercel Speed Insights incluído;
-- Session Replay desativado.
-
-Consulte [docs/OBSERVABILITY.md](./docs/OBSERVABILITY.md) para configuração, privacidade e validação.
+- `/status`: estado público, contagens do semestre e última sincronização;
+- `/api/health`: payload mínimo para monitoramento de disponibilidade.
 
 ## Documentação
 
 - [Arquitetura](./docs/ARCHITECTURE.md)
-- [Front-end](./docs/FRONTEND.md)
-- [Back-end](./docs/BACKEND.md)
 - [Banco de dados](./docs/DATABASE.md)
 - [RLS](./docs/RLS.md)
-- [Segurança](./docs/SECURITY.md)
 - [Observabilidade](./docs/OBSERVABILITY.md)
-- [Deploy](./docs/DEPLOY.md)
 - [Scraper](./docs/SCRAPER.md)
-- [Testes](./docs/TESTING.md)
+- [Deploy](./docs/DEPLOY.md)
 - [Roadmap](./docs/ROADMAP.md)
-- [Decisões arquiteturais](./docs/adr/)
 
 ## Contribuição
 
-Leia `CONTRIBUTING.md` e `AGENTS.md`, quando presentes na versão do repositório em uso, antes de alterar o projeto.
-
-## Licença
-
-A licença ainda deve ser escolhida explicitamente pela mantenedora. Consulte `LICENSE_GUIDE.md`.
+Leia [`CONTRIBUTING.md`](./CONTRIBUTING.md) e [`AGENTS.md`](./AGENTS.md).

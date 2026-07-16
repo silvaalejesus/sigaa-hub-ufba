@@ -1,57 +1,48 @@
 # Row Level Security
 
-## Objetivo
-
-RLS é uma camada de defesa do banco e deve permanecer ativa nas tabelas expostas pela API do Supabase.
-
 ## Princípios
 
 - leitura pública apenas dos dados necessários;
 - links públicos somente quando ativos;
-- denúncias e cadastros com regras restritas;
 - nenhuma operação privilegiada pelo navegador;
-- service role apenas em ambientes de servidor controlados e no scraper, quando indispensável.
+- service role somente no scraper e em CI/backend controlado;
+- funções `security definer` com `search_path` fixo e grants explícitos.
 
-## Leitura pública
+## Execuções do scraper
 
-Políticas devem limitar:
+RLS está ativa em `public.scraper_runs`. Não existe policy para `anon` nem para
+`authenticated`, e os grants da tabela são revogados desses papéis. Somente
+`service_role` recebe `SELECT`, `INSERT`, `UPDATE` e `DELETE`.
 
-- turmas ao semestre vigente quando possível;
-- links a `is_active = true`;
-- colunas sensíveis ou operacionais.
+A aplicação pública nunca consulta a tabela diretamente. Ela executa funções
+RPC que retornam apenas:
 
-Views públicas podem ser usadas para expor somente o formato necessário.
+- status e horários do último run;
+- última sincronização bem-sucedida;
+- duração agregada;
+- contagens do semestre;
+- booleano do health check.
 
-## Escrita pública
+As funções não retornam `error_message`, `metadata`, `trigger_source`, commit ou
+ID do workflow. O uso de `security definer` é restrito por:
 
-Há duas estratégias válidas:
+- `set search_path = public, pg_temp`;
+- nomes de tabela qualificados;
+- `REVOKE ALL ... FROM PUBLIC`;
+- `GRANT EXECUTE` apenas para `anon`, `authenticated` e `service_role`.
 
-1. policies que permitem inserção anônima com constraints rigorosas;
-2. Server Actions que chamam uma função SQL controlada.
+## Testes
 
-Para regras compostas, contadores e prevenção de corrida, funções SQL com `security definer` podem ser adequadas, mas exigem:
+`supabase/tests/scraper_runs_rls.sql` executa uma transação que confirma:
 
-- `search_path` fixo;
-- grants mínimos;
-- validação interna;
-- revisão cuidadosa.
+- `anon` não lê nem insere na tabela bruta;
+- `anon` executa a RPC segura;
+- `service_role` insere, atualiza e remove;
+- o contrato público não contém colunas operacionais restritas.
 
-## Denúncias
+Execute somente em banco local/de desenvolvimento:
 
-A operação deve:
-
-- inserir a denúncia;
-- atualizar o contador;
-- desativar o link quando aplicável;
-- ocorrer em uma transação.
-
-## Testes de RLS
-
-Testar ao menos:
-
-- usuário anônimo lê turma vigente;
-- usuário anônimo não lê dado restrito;
-- link inativo não aparece publicamente;
-- segundo link ativo é bloqueado;
-- operação não ignora a regra por concorrência;
-- service role é usada apenas onde documentado.
+```bash
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f supabase/tests/scraper_runs_rls.sql
+```

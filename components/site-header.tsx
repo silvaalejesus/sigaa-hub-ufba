@@ -4,6 +4,7 @@ import { Logo } from "@/components/logo";
 import { MobileNavigation } from "@/components/mobile-navigation";
 import { SITE_NAVIGATION_ITEMS } from "@/components/site-navigation";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { CURRENT_SEMESTER } from "@/lib/semester";
 
 export function SiteHeader() {
   return (
@@ -16,7 +17,7 @@ export function SiteHeader() {
           <Logo />
 
           <span className="hidden shrink-0 text-sm font-medium text-muted-foreground xl:inline">
-            UFBA · 2026.1
+            UFBA · {CURRENT_SEMESTER}
           </span>
         </Link>
         <div className="flex shrink-0 items-center gap-1">

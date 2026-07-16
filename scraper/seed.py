@@ -28,7 +28,14 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from supabase import Client, create_client
-
+from run_tracking import (
+    capture_unexpected_exception,
+    fail_scraper_run,
+    finish_scraper_run,
+    load_run_state,
+    sanitize_error_message,
+    start_scraper_run,
+)
 
 DEFAULT_INPUT_CANDIDATES = ("dados.json", "dados_sigaa.json")
 DEFAULT_BATCH_SIZE = 200
@@ -294,16 +301,22 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
-
     input_path = Path(args.input) if args.input else resolve_default_input()
+    run_state = load_run_state()
+    run_id = run_state.get("run_id")
 
     try:
         supabase_url = require_env("SUPABASE_URL")
         supabase_key = require_env("SUPABASE_SERVICE_ROLE_KEY")
-
         supabase = create_client(supabase_url, supabase_key)
-
         data = load_json(input_path)
+        metadata = data.get("metadata")
+        safe_metadata = metadata if isinstance(metadata, dict) else {}
+        semester_value = safe_metadata.get("semestre")
+        semester = semester_value if isinstance(semester_value, str) else None
+
+        if not run_id:
+            run_id = start_scraper_run(semester)
 
         print(f"Lendo arquivo: {input_path}")
 
@@ -321,14 +334,33 @@ def main() -> int:
             include_horario=args.include_horario,
         )
 
-        print("Importação concluída com sucesso.")
+        final_status = finish_scraper_run(
+            run_id,
+            data,
+            subjects_upserted=len(disciplina_id_by_codigo),
+            classes_upserted=total_turmas,
+        )
+
+        print("Importação concluída.")
+        print(f"Status da execução: {final_status}")
         print(f"Total de disciplinas no lote: {len(disciplina_id_by_codigo)}")
         print(f"Total de turmas processadas no lote: {total_turmas}")
 
-        return 0
+        if final_status == "failed":
+            print(
+                "A execução não processou o fluxo mínimo esperado.",
+                file=sys.stderr,
+            )
+            return 1
 
+        return 0
     except Exception as exc:
-        print(f"Erro na importação: {exc}", file=sys.stderr)
+        fail_scraper_run(run_id, exc, phase="synchronization_failed")
+        capture_unexpected_exception(exc)
+        print(
+            f"Erro na importação: {sanitize_error_message(exc)}",
+            file=sys.stderr,
+        )
         return 1
 
 

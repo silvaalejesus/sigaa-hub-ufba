@@ -12,8 +12,8 @@
 - [ ] adicionar `AGENTS.md`;
 - [ ] revisar e substituir o README atual;
 - [ ] confirmar modelo real das migrations;
-- [ ] documentar variáveis em `.env.example`;
-- [ ] confirmar scripts de lint, typecheck e testes;
+- [x] documentar variáveis em `.env.example`;
+- [x] confirmar scripts de lint, typecheck e testes;
 - [ ] escolher licença.
 
 ## Fase 1 — Observabilidade e experiência
@@ -23,8 +23,19 @@
 - [ ] confirmar Vercel Analytics no layout;
 - [ ] adicionar Speed Insights;
 - [ ] definir eventos de produto;
-- [ ] criar página `/status`;
-- [ ] registrar execução do scraper.
+- [x] criar página `/status`;
+  - [x] estado da aplicação, Supabase e sincronização;
+  - [x] contagens do semestre vigente;
+  - [x] detecção de dados desatualizados e execução abandonada;
+  - [x] endpoint mínimo `/api/health`;
+- [x] registrar execução do scraper;
+  - [x] migration versionada, RLS e grants mínimos;
+  - [x] início na extração e encerramento após o seed;
+  - [x] estados `running`, `success`, `partial` e `failed`;
+  - [x] testes de sanitização e permissões.
+
+> Os itens de Sentry, Analytics e Speed Insights só devem ser marcados após
+> confirmação no código e validação da configuração efetivamente publicada.
 
 ## Fase 2 — Segurança e consistência
 
@@ -54,7 +65,8 @@ codigo_disciplina,turma,semestre,link_whatsapp
 MAT001,010100,2026.1,https://chat.whatsapp.com/EXEMPLO
 ```
 
-O identificador interno pode ser aceito por integrações, mas o modelo público deve priorizar dados compreensíveis.
+O identificador interno pode ser aceito por integrações, mas o modelo público
+deve priorizar dados compreensíveis.
 
 ## Fase 4 — Qualidade operacional
 

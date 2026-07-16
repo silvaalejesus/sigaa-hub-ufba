@@ -39,7 +39,13 @@ from playwright.sync_api import (
     TimeoutError as PlaywrightTimeoutError,
     sync_playwright,
 )
-
+from run_tracking import (
+    capture_unexpected_exception,
+    fail_scraper_run,
+    record_extraction_summary,
+    sanitize_error_message,
+    start_scraper_run,
+)
 
 SIGAA_TURMAS_URL = "https://sigaa.ufba.br/sigaa/public/turmas/listar.jsf?aba=p-ensino"
 DEFAULT_NIVEL = "GRADUAÇÃO"
@@ -847,18 +853,22 @@ def run_scraper(args: argparse.Namespace) -> Dict[str, Any]:
 
 def main() -> None:
     args = parse_args()
-
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(message)s",
     )
 
+    semester = f"{args.ano}.{args.periodo}"
+    run_id = start_scraper_run(semester)
+
     try:
         payload = run_scraper(args)
-
         output_path = Path(args.output)
-        output_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-
+        output_path.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        record_extraction_summary(run_id, payload)
         logging.info("Arquivo salvo: %s", output_path)
         logging.info(
             "Extração concluída: %s disciplinas, %s turmas, %s unidade(s) com erro.",
@@ -866,9 +876,10 @@ def main() -> None:
             payload["metadata"]["total_turmas"],
             payload["metadata"]["total_unidades_com_erro"],
         )
-
     except Exception as exc:
-        logging.exception("Falha geral na execução: %s", exc)
+        fail_scraper_run(run_id, exc, phase="extraction_failed")
+        capture_unexpected_exception(exc)
+        logging.error("Falha geral na extração: %s", sanitize_error_message(exc))
         raise SystemExit(1)
 
 

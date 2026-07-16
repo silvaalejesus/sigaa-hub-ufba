@@ -1,158 +1,93 @@
-# Guia Definitivo de Execução: SIGAA Hub
-
-Este documento detalha o passo a passo para configurar a infraestrutura, extrair os dados e rodar a aplicação localmente.
+# Configuração local do SIGAA Hub UFBA
 
 ## Pré-requisitos
 
-Antes de começar, certifique-se de ter instalado em sua máquina:
-
-- Node.js 18 ou superior;
+- Node.js compatível com Next.js 16;
 - pnpm;
 - Python 3.9 ou superior;
-- uma conta ativa no Supabase.
+- projeto Supabase;
+- Supabase CLI ou acesso ao SQL Editor.
 
----
+## 1. Banco de dados
 
-## Passo 1: Configuração do Banco de Dados (Supabase)
+Aplique `supabase/schema.sql` em uma instalação nova e, em seguida, as migrations
+versionadas, incluindo:
 
-O banco de dados atua como a ponte entre o robô extrator em Python e a interface Next.js.
+```text
+supabase/migrations/202607140001_scraper_runs_status.sql
+```
 
-1. Acesse o painel do seu projeto no Supabase.
-2. No menu lateral, vá em **Project Settings > API**.
-3. Guarde estas três informações:
-   - Project URL;
-   - Project API Key `anon/public`;
-   - Project API Key `service_role/secret`.
-
-A chave `service_role` ignora as regras de segurança e nunca pode ser colocada no front-end.
-
-Para uma instalação limpa, siga a documentação de banco de dados e execute o conteúdo versionado em `supabase/`. Não altere migrations apenas para configurar observabilidade.
-
----
-
-## Passo 2: Extração de Dados e Alimentação (Back-end / Python)
-
-O robô em Python navega no SIGAA, extrai os dados e os envia às tabelas do Supabase.
-
-1. Navegue até a pasta do scraper:
+Com a CLI:
 
 ```bash
-cd scraper
+supabase link --project-ref SEU_PROJECT_REF
+supabase db push
 ```
 
-2. Crie e ative o ambiente virtual:
+A service role ignora RLS. Ela nunca deve ser usada no navegador ou em variável
+`NEXT_PUBLIC_*`.
 
-```bash
-python -m venv venv
-```
+## 2. Aplicação Next.js
 
-No Windows:
-
-```powershell
-venv\Scripts\activate
-```
-
-No macOS/Linux:
-
-```bash
-source venv/bin/activate
-```
-
-3. Instale as dependências e o navegador do Playwright:
-
-```bash
-pip install -r requirements.txt
-playwright install
-```
-
-4. Configure as variáveis exclusivas do scraper em ambiente seguro:
+Copie `.env.example` para `.env.local` e preencha apenas as variáveis públicas:
 
 ```env
-SUPABASE_URL=
-SUPABASE_SERVICE_ROLE_KEY=
+NEXT_PUBLIC_SUPABASE_URL=https://SEU-PROJETO.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=SUA_ANON_KEY
+STATUS_STALE_AFTER_HOURS=384
 ```
 
-5. Execute a raspagem e o seed conforme os scripts mantidos no diretório `scraper`:
-
-```bash
-python scraper.py
-python seed.py
-```
-
-O Sentry não está integrado ao scraper Python nesta etapa.
-
----
-
-## Passo 3: Executando a Interface (Front-end / Next.js)
-
-Na raiz do projeto:
+Execute:
 
 ```bash
 pnpm install
-cp .env.example .env.local
-```
-
-No Windows PowerShell:
-
-```powershell
-Copy-Item .env.example .env.local
-```
-
-Preencha as credenciais públicas do Supabase:
-
-```env
-NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_ANON_KEY=
-```
-
-A proteção antiabuso das denúncias usa um segredo exclusivo do servidor:
-
-```env
-REPORT_FINGERPRINT_SECRET=
-```
-
-Use um valor longo e aleatório. Não use o prefixo `NEXT_PUBLIC_`.
-
-Inicie o servidor:
-
-```bash
 pnpm dev
 ```
 
-Acesse `http://localhost:3000`.
+Rotas para validação:
 
----
+- `http://localhost:3000/status`;
+- `http://localhost:3000/api/health`.
 
-## Passo 4: Sentry e Vercel
+## 3. Scraper e seed
 
-O Sentry fica desativado quando a aplicação classifica o ambiente como `local`. Portanto, o DSN pode permanecer vazio no desenvolvimento:
-
-```env
-NEXT_PUBLIC_SENTRY_DSN=
-SENTRY_ORG=
-SENTRY_PROJECT=
-SENTRY_AUTH_TOKEN=
-SENTRY_TRACES_SAMPLE_RATE=0.1
-NEXT_PUBLIC_VERCEL_ENV=
+```bash
+cd scraper
+python -m venv .venv
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+python -m playwright install chromium
 ```
 
-Para Preview e Production:
+Configure somente no terminal/backend confiável:
 
-1. cadastre as variáveis no painel da Vercel;
-2. habilite a exposição das System Environment Variables para preencher `NEXT_PUBLIC_VERCEL_ENV`;
-3. habilite **Speed Insights** no painel do projeto;
-4. faça um novo deploy após alterar qualquer variável.
+```bash
+export SUPABASE_URL="https://SEU-PROJETO.supabase.co"
+export SUPABASE_SERVICE_ROLE_KEY="SUA_SERVICE_ROLE"
+export SCRAPER_TRIGGER_SOURCE="local"
+```
 
-`SENTRY_AUTH_TOKEN` é segredo de build e nunca pode ter prefixo `NEXT_PUBLIC_`.
+Execute as duas etapas na mesma pasta:
 
-A validação de envio deve ser feita em uma branch com deploy de Preview, sem deixar rota ou botão de erro no código final. Consulte [docs/OBSERVABILITY.md](./docs/OBSERVABILITY.md) e [docs/DEPLOY.md](./docs/DEPLOY.md).
+```bash
+python scraper.py --ano 2026 --periodo 1 --output dados_sigaa.json
+python seed.py --input dados_sigaa.json
+```
 
-## Validação antes de enviar alterações
+A primeira etapa cria `scraper_runs.status = running`; a segunda define
+`success`, `partial` ou `failed` depois dos upserts.
+
+## 4. Validação
 
 ```bash
 pnpm lint
 pnpm exec tsc --noEmit
+pnpm test
 pnpm build
+python -m compileall scraper
+python -m unittest discover -s scraper/tests
+python -m pytest
 ```
 
-O upload de source maps somente é executado quando `SENTRY_ORG`, `SENTRY_PROJECT` e `SENTRY_AUTH_TOKEN` estão disponíveis durante o build.
+`pytest` é opcional se não estiver instalado; os testes Python usam `unittest` e
+podem ser executados sem adicionar uma nova stack.

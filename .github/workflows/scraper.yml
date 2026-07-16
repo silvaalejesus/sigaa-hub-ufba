@@ -1,0 +1,57 @@
+name: Atualizar dados do SIGAA
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 3 1,15 * *"
+
+permissions:
+  contents: read
+
+env:
+  SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+  SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+  SCRAPER_TRIGGER_SOURCE: ${{ github.event_name == 'schedule' && 'scheduled' || 'github_actions' }}
+
+jobs:
+  scrape-and-sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    defaults:
+      run:
+        working-directory: scraper
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: scraper/requirements.txt
+
+      - name: Instalar dependências
+        run: pip install -r requirements.txt
+
+      - name: Instalar Chromium do Playwright
+        run: python -m playwright install --with-deps chromium
+
+      - name: Extrair dados públicos do SIGAA
+        run: python scraper.py --output dados_sigaa.json
+
+      - name: Sincronizar dados no Supabase
+        run: python seed.py --input dados_sigaa.json
+
+      - name: Publicar artefato da coleta
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dados-sigaa-${{ github.run_number }}
+          path: |
+            scraper/dados_sigaa.json
+            scraper/debug_sigaa/
+          if-no-files-found: ignore
+          retention-days: 7

@@ -2,65 +2,57 @@
 
 ## Ambientes
 
-Recomendados:
-
-- local;
-- preview;
-- produção.
-
-Cada ambiente deve usar configuração e, preferencialmente, projeto Supabase apropriado ao risco.
+Use local, preview e produção. Cada ambiente deve apontar para configuração
+Supabase compatível com seu risco.
 
 ## Vercel
 
-O front-end está preparado para deploy na Vercel.
-
-Revisar:
-
-- variáveis de ambiente;
-- domínio;
-- proteção de previews;
-- logs;
-- Analytics;
-- Speed Insights;
-- integração com Sentry;
-- política de deploy automático.
-
-## Variáveis
-
-Manter um `.env.example` sem valores secretos, descrevendo:
+Configure somente as variáveis públicas necessárias ao Next.js:
 
 ```text
-NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_ANON_KEY=
-SUPABASE_SERVICE_ROLE_KEY=
-SENTRY_DSN=
-SENTRY_AUTH_TOKEN=
+NEXT_PUBLIC_SUPABASE_URL
+NEXT_PUBLIC_SUPABASE_ANON_KEY
+STATUS_STALE_AFTER_HOURS=384
 ```
 
-A lista deve ser ajustada à implementação real. Variáveis exclusivamente do scraper devem ficar documentadas no diretório do scraper.
+A página `/status` e `/api/health` nunca usam `SUPABASE_SERVICE_ROLE_KEY`.
+O endpoint de máquina envia `Cache-Control: no-store`; a página pública é
+revalidada a cada cinco minutos.
 
-## Migrations
+## GitHub Actions do scraper
 
-- versionar migrations em `supabase/`;
-- não alterar produção manualmente sem registrar migration;
-- testar constraints e RLS;
-- executar backup antes de mudanças destrutivas.
+Secrets obrigatórios:
 
-## Rollback
+```text
+SUPABASE_URL
+SUPABASE_SERVICE_ROLE_KEY
+```
 
-Para código, manter capacidade de promover um deployment anterior. Para banco, migrations destrutivas devem possuir estratégia explícita; rollback automático nem sempre é seguro.
+`GITHUB_SHA`, `GITHUB_RUN_ID` e `GITHUB_RUN_NUMBER` já são fornecidas pelo GitHub
+e não devem ser duplicadas como secrets. O workflow define apenas
+`SCRAPER_TRIGGER_SOURCE` e preserva a agenda existente (dias 1 e 15, 03:00 UTC).
 
-## Domínio
+O workflow fica em `.github/workflows/scraper.yml`, executa `scraper.py` e depois
+`seed.py`, sem `continue-on-error`. Falha em qualquer etapa mantém o job como
+falha.
 
-Um domínio próprio pode apontar para a Vercel sem retirar o projeto da plataforma.
+## Migration
 
-## Checklist de produção
+Antes do deploy do código:
 
-- [ ] build aprovado;
-- [ ] migrations aplicadas;
-- [ ] RLS verificada;
-- [ ] variáveis configuradas;
-- [ ] health check validado;
-- [ ] observabilidade ativa;
-- [ ] nenhuma chave em logs ou bundle;
-- [ ] aviso legal e privacidade revisados.
+1. faça backup adequado ao ambiente;
+2. aplique `supabase/migrations/202607140001_scraper_runs_status.sql`;
+3. execute os testes RLS em desenvolvimento;
+4. faça uma execução local ou manual do workflow;
+5. valide `/status` e `/api/health`.
+
+## Checklist
+
+- [ ] migration aplicada;
+- [ ] RLS e grants verificados;
+- [ ] variáveis públicas na Vercel;
+- [ ] secrets do scraper somente no GitHub Actions;
+- [ ] `/api/health` retorna `200` com banco acessível;
+- [ ] indisponibilidade do banco retorna `503` sem detalhes;
+- [ ] `/status` exibe datas em `America/Bahia`;
+- [ ] nenhuma chave em logs, bundle ou artefatos.

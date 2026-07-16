@@ -19,3 +19,6 @@ venv
 *.lock.*
 # Sentry Config File
 .env.sentry-build-plugin
+
+# Estado efêmero entre extração e seed
+scraper/.scraper_run_state.json
