@@ -36,7 +36,7 @@ function CommandGroup({ className, ...props }: React.HTMLAttributes<HTMLDivEleme
   return <div className={cn('space-y-1', className)} {...props} />
 }
 
-interface CommandItemProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+interface CommandItemProps extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, 'onSelect'> {
   value?: string
   onSelect?: (value: string) => void
 }

@@ -103,7 +103,7 @@ export async function buscarDepartamentos(): Promise<string[]> {
 
   const departamentos = new Set<string>()
 
-  for (const row of data ?? []) {
+  for (const row of (data ?? []) as Array<{ departamento: string | null }>) {
     const departamento = row.departamento?.trim()
 
     if (departamento) {

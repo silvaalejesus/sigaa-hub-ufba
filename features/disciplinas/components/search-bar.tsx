@@ -201,7 +201,6 @@ export function SearchBar({
             <PopoverContent
               className="w-[calc(100vw-3rem)] max-w-[460px] p-0 sm:w-[460px]"
               align="start"
-              sideOffset={8}
             >
               <Command>
                 <CommandInput

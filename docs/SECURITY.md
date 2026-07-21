@@ -1,66 +1,20 @@
 # Segurança
 
-## Modelo de ameaça resumido
+## Controles implementados
 
-Como a aplicação permite escrita anônima, os principais riscos são:
+- validação Valibot e constraints SQL;
+- índice único parcial contra concorrência;
+- RPCs atômicas com `SECURITY DEFINER` e `search_path = ''`;
+- rate limiting persistente no PostgreSQL;
+- honeypot fora da área visual, sem `type=hidden`;
+- HMAC SHA-256 por IP normalizado e escopo;
+- nenhum IP bruto armazenado;
+- logs estruturados com whitelist e redação;
+- Sentry sem PII, bodies, cookies, headers ou query strings;
+- headers HTTP via `next.config.mjs`.
 
-- spam de links;
-- denúncias automatizadas;
-- links maliciosos ou fora do domínio;
-- abuso de concorrência;
-- enumeração e scraping excessivo;
-- exposição de chaves;
-- dados de telemetria contendo informações indevidas.
+## Headers
 
-## Controles prioritários
+São enviados `nosniff`, `strict-origin-when-cross-origin`, `DENY`, Permissions Policy e COOP. A CSP inicia como `Content-Security-Policy-Report-Only`, sem `unsafe-eval`, `connect-src *` ou `script-src *`. Após observar violações reais em preview/produção, ajuste origens e substitua o nome do header por `Content-Security-Policy`.
 
-### Validação
-
-- Valibot no cliente para UX.
-- Valibot no servidor para segurança.
-- allowlist estrita do host `chat.whatsapp.com`.
-- usar `URL` para parsing; não confiar apenas em `startsWith`.
-
-### Rate limiting
-
-Aplicar em:
-
-- cadastro individual;
-- denúncia;
-- importação CSV;
-- rotas administrativas;
-- health check detalhado, se expuser informações operacionais.
-
-Definir limites por ação, não um único limite global.
-
-### Honeypot
-
-Campos ocultos devem:
-
-- não receber foco;
-- ter nome não óbvio;
-- ser verificados no servidor;
-- não ser o único mecanismo antispam.
-
-### Segredos
-
-- `NEXT_PUBLIC_*` somente para valores realmente públicos.
-- Service role nunca no client bundle.
-- Chaves em variáveis de ambiente.
-- Rotação após suspeita de vazamento.
-
-### Cabeçalhos
-
-Avaliar CSP, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy` e proteção de framing.
-
-### Administração
-
-O painel administrativo deve exigir autenticação e autorização explícita. Não usar apenas URL secreta.
-
-## Cookies e consentimento
-
-Sentry, analytics e ferramentas de terceiros devem ser configurados segundo a coleta efetiva. AdOpt torna-se necessário quando houver cookies ou rastreadores não essenciais. GTM não é requisito por si só.
-
-## Relato de vulnerabilidade
-
-Antes de publicar um canal público, definir um e-mail ou fluxo privado para relatos. Não incluir endereço inventado na documentação.
+HSTS não inclui `includeSubDomains` nem `preload` nesta fase; só deve ser ativado após confirmar HTTPS para todos os subdomínios relevantes.

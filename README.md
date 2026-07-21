@@ -1,57 +1,38 @@
 # SIGAA Hub UFBA
 
-Plataforma colaborativa para localizar turmas do semestre vigente e compartilhar
-links de grupos de WhatsApp.
+Plataforma pública e colaborativa para localizar turmas do semestre vigente e compartilhar links de grupos de WhatsApp.
 
-> Projeto independente, sem vínculo oficial com a Universidade Federal da Bahia,
-> com o SIGAA ou com a Meta/WhatsApp.
+> Projeto independente, sem vínculo oficial com a Universidade Federal da Bahia, com o SIGAA ou com a Meta/WhatsApp.
 
-## Estado do projeto
+## Arquitetura atual
 
-A aplicação usa Next.js, Supabase, scraper Python/Playwright e deploy na Vercel.
-A infraestrutura pública de status está disponível em `/status`, com health
-check mínimo em `/api/health`. O scraper registra extração e sincronização em
-`public.scraper_runs`.
+- Next.js 16/React 19 no Netlify, usando o adaptador OpenNext mantido pela plataforma;
+- Supabase/PostgreSQL com RLS e RPCs transacionais;
+- Sentry para falhas inesperadas, com dados sensíveis redigidos;
+- scraper Python/Playwright executado pelo GitHub Actions;
+- `/status` e `/api/health` para estado operacional.
 
-## Desenvolvimento local
+Vercel Analytics e Speed Insights foram descontinuados por causa da mudança de hospedagem, não por falha técnica. Não há substituto de analytics nesta fase.
 
-Consulte [`SETUP.md`](./SETUP.md) e [`docs/DEPLOY.md`](./docs/DEPLOY.md).
+## Desenvolvimento
 
 ```bash
 pnpm install
 pnpm dev
 pnpm lint
-pnpm exec tsc --noEmit
+pnpm typecheck
 pnpm test
 pnpm build
-python -m compileall scraper
-python -m unittest discover -s scraper/tests
 ```
+
+Consulte [SETUP.md](./SETUP.md), [docs/DEPLOY.md](./docs/DEPLOY.md) e [docs/SECURITY.md](./docs/SECURITY.md).
 
 ## Banco
 
-Aplique primeiro o schema existente e depois as migrations versionadas. Para o
-status operacional:
+Aplique migrations em ordem. A Fase 2 está em:
 
 ```text
-supabase/migrations/202607140001_scraper_runs_status.sql
+supabase/migrations/20260717010000_phase2_security.sql
 ```
 
-## Rotas operacionais
-
-- `/status`: estado público, contagens do semestre e última sincronização;
-- `/api/health`: payload mínimo para monitoramento de disponibilidade.
-
-## Documentação
-
-- [Arquitetura](./docs/ARCHITECTURE.md)
-- [Banco de dados](./docs/DATABASE.md)
-- [RLS](./docs/RLS.md)
-- [Observabilidade](./docs/OBSERVABILITY.md)
-- [Scraper](./docs/SCRAPER.md)
-- [Deploy](./docs/DEPLOY.md)
-- [Roadmap](./docs/ROADMAP.md)
-
-## Contribuição
-
-Leia [`CONTRIBUTING.md`](./CONTRIBUTING.md) e [`AGENTS.md`](./AGENTS.md).
+Ela não deve ser aplicada em produção antes de backup, revisão do saneamento de links ativos duplicados e validação em ambiente de desenvolvimento.

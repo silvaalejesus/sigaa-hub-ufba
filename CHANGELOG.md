@@ -1,22 +1,14 @@
 # Changelog
 
-As mudanças relevantes devem ser registradas neste arquivo.
+## 2026-07-17 — Fase 2
 
-O formato segue a ideia de *Keep a Changelog*, com categorias como Adicionado, Alterado, Corrigido, Segurança e Removido.
-
-## [Não lançado]
-
-### Adicionado
-
-- Pacote inicial de documentação técnica.
-- Roadmap de observabilidade, segurança, importação CSV e administração.
-
-### Planejado
-
-- Sentry.
-- Vercel Speed Insights.
-- Página de status.
-- Rate limiting e honeypot.
-- Importação massiva de links via CSV.
-- Verificação periódica de links.
-- Painel administrativo mínimo.
+- migração de hospedagem da Vercel/Cloudflare para Netlify;
+- remoção de Vercel Analytics e Speed Insights;
+- unicidade de link ativo por turma no PostgreSQL;
+- cadastro e denúncia por RPCs transacionais;
+- rate limiting persistente e fingerprint HMAC;
+- honeypots nos formulários públicos;
+- revisão de RLS/grants;
+- sanitização de logs/Sentry;
+- headers de segurança e CSP Report-Only;
+- testes SQL e testes puros de segurança.

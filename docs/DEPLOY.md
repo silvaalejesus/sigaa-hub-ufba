@@ -1,58 +1,40 @@
-# Deploy e ambientes
+# Deploy no Netlify
 
-## Ambientes
+## Integração
 
-Use local, preview e produção. Cada ambiente deve apontar para configuração
-Supabase compatível com seu risco.
+Conecte o repositório no Netlify. O Next.js é detectado e executado pelo adaptador OpenNext da plataforma. `netlify.toml` versiona apenas o comando e as versões de Node/pnpm; não define `publish` nem plugin legado.
 
-## Vercel
+## Variáveis
 
-Configure somente as variáveis públicas necessárias ao Next.js:
+Cadastre para Production e Deploy Previews, conforme o uso:
 
-```text
-NEXT_PUBLIC_SUPABASE_URL
-NEXT_PUBLIC_SUPABASE_ANON_KEY
-STATUS_STALE_AFTER_HOURS=384
+- build/runtime públicas: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `NEXT_PUBLIC_SENTRY_DSN`;
+- runtime secretas: `ABUSE_FINGERPRINT_SECRET`, opcionalmente `SENTRY_DSN`;
+- build secretas: `SENTRY_ORG`, `SENTRY_PROJECT`, `SENTRY_AUTH_TOKEN`;
+- build/runtime: `SENTRY_TRACES_SAMPLE_RATE`, `STATUS_STALE_AFTER_HOURS`.
+
+Variáveis alteradas exigem novo deploy quando são lidas no build. Nunca cadastrar service role no site Netlify.
+
+## Publicação
+
+```bash
+pnpm install
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm build
 ```
 
-A página `/status` e `/api/health` nunca usam `SUPABASE_SERVICE_ROLE_KEY`.
-O endpoint de máquina envia `Cache-Control: no-store`; a página pública é
-revalidada a cada cinco minutos.
+Após o preview:
 
-## GitHub Actions do scraper
-
-Secrets obrigatórios:
-
-```text
-SUPABASE_URL
-SUPABASE_SERVICE_ROLE_KEY
+```bash
+curl -I https://URL_DO_PREVIEW
+curl -I https://URL_DO_PREVIEW/status
+curl -I https://URL_DO_PREVIEW/api/health
 ```
 
-`GITHUB_SHA`, `GITHUB_RUN_ID` e `GITHUB_RUN_NUMBER` já são fornecidas pelo GitHub
-e não devem ser duplicadas como secrets. O workflow define apenas
-`SCRAPER_TRIGGER_SOURCE` e preserva a agenda existente (dias 1 e 15, 03:00 UTC).
+Teste cadastro, duplicidade, três denúncias, rate limit, honeypot, temas, mobile, logs e Sentry.
 
-O workflow fica em `.github/workflows/scraper.yml`, executa `scraper.py` e depois
-`seed.py`, sem `continue-on-error`. Falha em qualquer etapa mantém o job como
-falha.
+## Rate limiting da plataforma
 
-## Migration
-
-Antes do deploy do código:
-
-1. faça backup adequado ao ambiente;
-2. aplique `supabase/migrations/202607140001_scraper_runs_status.sql`;
-3. execute os testes RLS em desenvolvimento;
-4. faça uma execução local ou manual do workflow;
-5. valide `/status` e `/api/health`.
-
-## Checklist
-
-- [ ] migration aplicada;
-- [ ] RLS e grants verificados;
-- [ ] variáveis públicas na Vercel;
-- [ ] secrets do scraper somente no GitHub Actions;
-- [ ] `/api/health` retorna `200` com banco acessível;
-- [ ] indisponibilidade do banco retorna `503` sem detalhes;
-- [ ] `/status` exibe datas em `America/Bahia`;
-- [ ] nenhuma chave em logs, bundle ou artefatos.
+O Netlify permite regras para funções, mas Server Actions do Next.js usam caminhos internos gerados pelo adaptador. Não são criados limites frágeis baseados nesses caminhos. A proteção de negócio permanece no Supabase. Uma regra adicional para `/api/health` só deve ser adicionada após medir o monitoramento legítimo.

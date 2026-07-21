@@ -24,6 +24,7 @@ const addLinkSchema = v.object({
       'O link deve começar com https://chat.whatsapp.com/',
     ),
   ),
+  contactReference: v.optional(v.string(), ''),
 })
 
 type AddLinkFormData = v.InferInput<typeof addLinkSchema>
@@ -42,7 +43,6 @@ export function AddLinkInlineForm({
   onSuccess,
 }: AddLinkInlineFormProps) {
   const [isPending, startTransition] = useTransition()
-
   const {
     register,
     handleSubmit,
@@ -52,21 +52,19 @@ export function AddLinkInlineForm({
   } = useForm<AddLinkFormData>({
     resolver: valibotResolver(addLinkSchema),
     mode: 'onChange',
-    defaultValues: {
-      url: '',
-    },
+    defaultValues: { url: '', contactReference: '' },
   })
 
   function onSubmit(data: AddLinkFormData) {
     startTransition(async () => {
-      const result = await adicionarLink(turmaId, data.url)
+      const result = await adicionarLink(
+        turmaId,
+        data.url,
+        data.contactReference ?? '',
+      )
 
       if (!result.ok) {
-        setError('root', {
-          type: 'server',
-          message: result.message,
-        })
-
+        setError('root', { type: 'server', message: result.message })
         toast.error(result.message)
         return
       }
@@ -79,55 +77,64 @@ export function AddLinkInlineForm({
 
   return (
     <form
-      className="mt-4 rounded-2xl border bg-muted/30 p-4"
       onSubmit={handleSubmit(onSubmit)}
+      className="relative rounded-lg border bg-muted/20 p-4"
     >
-      <div className="mb-3 flex items-start justify-between gap-3">
+      <div
+        aria-hidden="true"
+        className="absolute left-[-10000px] top-auto h-px w-px overflow-hidden"
+      >
+        <label htmlFor={`contact-reference-${turmaId}`}>
+          Não preencha este campo
+        </label>
+        <input
+          id={`contact-reference-${turmaId}`}
+          type="text"
+          tabIndex={-1}
+          autoComplete="off"
+          {...register('contactReference')}
+        />
+      </div>
+
+      <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-sm font-semibold">Adicionar link da turma {codigoTurma}</p>
-          <p className="mt-1 text-xs text-muted-foreground">
+          <p className="font-medium">Adicionar link da turma {codigoTurma}</p>
+          <p className="text-sm text-muted-foreground">
             Cole um link público iniciado por https://chat.whatsapp.com/.
           </p>
         </div>
-
         <Button
           type="button"
-          size="icon"
           variant="ghost"
-          className="size-8"
+          size="icon"
           disabled={isPending}
           onClick={onCancel}
+          aria-label="Cancelar cadastro do link"
         >
           <X className="size-4" />
         </Button>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
-        <div className="space-y-1.5">
-          <label htmlFor={`whatsapp-url-${turmaId}`} className="sr-only">
-            Link de convite do WhatsApp
-          </label>
+      <div className="mt-3 space-y-2">
+        <label htmlFor={`whatsapp-link-${turmaId}`} className="text-sm font-medium">
+          Link de convite do WhatsApp
+        </label>
+        <Input
+          id={`whatsapp-link-${turmaId}`}
+          placeholder="https://chat.whatsapp.com/..."
+          autoComplete="off"
+          disabled={isPending}
+          {...register('url')}
+        />
+        {errors.url?.message && (
+          <p className="text-xs text-destructive">{errors.url.message}</p>
+        )}
+        {errors.root?.message && (
+          <p className="text-xs text-destructive">{errors.root.message}</p>
+        )}
+      </div>
 
-          <Input
-            id={`whatsapp-url-${turmaId}`}
-            type="url"
-            inputMode="url"
-            placeholder="https://chat.whatsapp.com/..."
-            autoComplete="off"
-            aria-invalid={Boolean(errors.url)}
-            disabled={isPending}
-            {...register('url')}
-          />
-
-          {errors.url?.message && (
-            <p className="text-xs text-destructive">{errors.url.message}</p>
-          )}
-
-          {errors.root?.message && (
-            <p className="text-xs text-destructive">{errors.root.message}</p>
-          )}
-        </div>
-
+      <div className="mt-3 flex justify-end">
         <Button type="submit" disabled={!isValid || isPending}>
           {isPending ? (
             <Loader2 className="size-4 animate-spin" />

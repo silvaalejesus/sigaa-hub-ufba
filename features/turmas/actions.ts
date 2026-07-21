@@ -1,16 +1,21 @@
 'use server'
 
-import { createHmac } from 'node:crypto'
 import { revalidatePath } from 'next/cache'
 import { headers } from 'next/headers'
 import * as v from 'valibot'
 
 import { captureUnexpectedError } from '@/lib/observability/capture-unexpected-error'
+import { getIdSuffix, writeSafeLog } from '@/lib/observability/safe-logger'
+import { createAbuseFingerprint } from '@/lib/security/abuse-fingerprint'
 import { createClient } from '@/lib/supabase/server'
 
 const WHATSAPP_INVITE_REGEX =
   /^https:\/\/chat\.whatsapp\.com\/[A-Za-z0-9_-]+\/?$/
-const COUNTRY_CODE_REGEX = /^[A-Z]{2}$/
+
+const honeypotSchema = v.optional(
+  v.pipe(v.string(), v.maxLength(200, 'Dados inválidos.')),
+  '',
+)
 
 const adicionarLinkSchema = v.object({
   turmaId: v.pipe(v.string(), v.uuid('Turma inválida.')),
@@ -23,6 +28,7 @@ const adicionarLinkSchema = v.object({
       'O link deve começar com https://chat.whatsapp.com/',
     ),
   ),
+  contactReference: honeypotSchema,
 })
 
 const denunciarLinkSchema = v.object({
@@ -33,227 +39,287 @@ const denunciarLinkSchema = v.object({
     v.minLength(10, 'Informe um motivo com pelo menos 10 caracteres.'),
     v.maxLength(150, 'O motivo deve ter no máximo 150 caracteres.'),
   ),
+  contactReference: honeypotSchema,
 })
 
-interface HeaderReader {
-  get(name: string): string | null
-}
-
-interface ReportMetadata {
-  reporterFingerprint: string | null
-  countryCode: string | null
-}
+export type TurmaActionCode =
+  | 'ADDED'
+  | 'REPORTED'
+  | 'DEACTIVATED'
+  | 'VALIDATION_ERROR'
+  | 'ACTIVE_LINK_EXISTS'
+  | 'RATE_LIMITED'
+  | 'DUPLICATE_REPORT'
+  | 'INACTIVE_LINK'
+  | 'NOT_FOUND'
+  | 'HONEYPOT_TRIGGERED'
+  | 'CONFIGURATION_ERROR'
+  | 'DATABASE_ERROR'
 
 export type TurmaActionResult =
-  | {
-      ok: true
-      message: string
-    }
-  | {
-      ok: false
-      message: string
-    }
+  | { ok: true; code: TurmaActionCode; message: string }
+  | { ok: false; code: TurmaActionCode; message: string }
 
-function getFirstForwardedIp(headerStore: HeaderReader): string | null {
-  const forwardedFor =
-    headerStore.get('x-vercel-forwarded-for') ??
-    headerStore.get('x-forwarded-for') ??
-    headerStore.get('x-real-ip')
-  const firstIp = forwardedFor?.split(',')[0]?.trim()
-
-  return firstIp || null
+function validationError(message: string): TurmaActionResult {
+  return { ok: false, code: 'VALIDATION_ERROR', message }
 }
 
-function getCountryCode(headerStore: HeaderReader): string | null {
-  const countryCode = headerStore
-    .get('x-vercel-ip-country')
-    ?.trim()
-    .toUpperCase()
+function honeypotResponse(): TurmaActionResult {
+  writeSafeLog('warn', {
+    event: 'public_form_rejected',
+    code: 'HONEYPOT_TRIGGERED',
+    environment: process.env.CONTEXT ?? process.env.NODE_ENV,
+  })
 
-  if (!countryCode || !COUNTRY_CODE_REGEX.test(countryCode)) {
-    return null
-  }
-
-  return countryCode
-}
-
-function createReporterFingerprint(
-  headerStore: HeaderReader,
-): string | null {
-  const secret = process.env.REPORT_FINGERPRINT_SECRET?.trim()
-  const clientIp = getFirstForwardedIp(headerStore)
-
-  if (!secret || !clientIp) {
-    return null
-  }
-
-  const userAgent = headerStore.get('user-agent')?.trim().slice(0, 512) ?? 'unknown'
-
-  return createHmac('sha256', secret)
-    .update(`${clientIp}\n${userAgent}`)
-    .digest('hex')
-}
-
-function getReportMetadata(headerStore: HeaderReader): ReportMetadata {
+  // Resposta deliberadamente genérica para não confirmar o mecanismo ao bot.
   return {
-    reporterFingerprint: createReporterFingerprint(headerStore),
-    countryCode: getCountryCode(headerStore),
+    ok: true,
+    code: 'HONEYPOT_TRIGGERED',
+    message: 'Solicitação recebida.',
   }
 }
 
-function getReportErrorMessage(code: string | undefined): string {
-  if (code === 'P0001') {
-    return 'Esta conexão já denunciou este link.'
-  }
+async function getFingerprint(
+  actionScope: 'add_link' | 'report_link',
+): Promise<string | null> {
+  const headerStore = await headers()
+  const result = createAbuseFingerprint(headerStore, actionScope)
 
-  if (code === 'P0002') {
-    return 'Este link não está mais disponível para denúncia.'
-  }
+  if (result.ok) return result.fingerprint
 
-  if (code === '22004' || code === '22023') {
-    return 'Os dados da denúncia são inválidos.'
-  }
-
-  return 'Não foi possível registrar a denúncia. Tente novamente.'
+  captureUnexpectedError(new Error(`Abuse protection ${result.code}`), {
+    operation: `abuse-fingerprint.${actionScope}`,
+    subsystem: 'security',
+    tags: { code: result.code },
+  })
+  writeSafeLog('error', {
+    event: 'abuse_fingerprint_unavailable',
+    code: result.code,
+    environment: process.env.CONTEXT ?? process.env.NODE_ENV,
+  })
+  return null
 }
 
-function isExpectedReportError(code: string | undefined): boolean {
-  return ['P0001', 'P0002', '22004', '22023'].includes(code ?? '')
+function mapAddResult(result: unknown): TurmaActionResult {
+  if (result === 'added') {
+    return { ok: true, code: 'ADDED', message: 'Link adicionado com sucesso.' }
+  }
+  if (result === 'active_link_exists') {
+    return {
+      ok: false,
+      code: 'ACTIVE_LINK_EXISTS',
+      message: 'Esta turma já possui um grupo ativo.',
+    }
+  }
+  if (result === 'rate_limited') {
+    return {
+      ok: false,
+      code: 'RATE_LIMITED',
+      message: 'Não foi possível concluir agora. Tente novamente mais tarde.',
+    }
+  }
+  if (result === 'not_found') {
+    return {
+      ok: false,
+      code: 'NOT_FOUND',
+      message: 'A turma informada não está disponível.',
+    }
+  }
+  return {
+    ok: false,
+    code: 'DATABASE_ERROR',
+    message: 'Não foi possível adicionar o link. Tente novamente.',
+  }
+}
+
+function mapReportResult(result: unknown): TurmaActionResult {
+  if (result === 'reported') {
+    return {
+      ok: true,
+      code: 'REPORTED',
+      message: 'Denúncia registrada com sucesso.',
+    }
+  }
+  if (result === 'deactivated') {
+    return {
+      ok: true,
+      code: 'DEACTIVATED',
+      message: 'Denúncia registrada. O link foi desativado para revisão.',
+    }
+  }
+  if (result === 'duplicate') {
+    return {
+      ok: false,
+      code: 'DUPLICATE_REPORT',
+      message: 'Esta conexão já enviou uma denúncia recente para este link.',
+    }
+  }
+  if (result === 'rate_limited') {
+    return {
+      ok: false,
+      code: 'RATE_LIMITED',
+      message: 'Não foi possível concluir agora. Tente novamente mais tarde.',
+    }
+  }
+  if (result === 'inactive') {
+    return {
+      ok: false,
+      code: 'INACTIVE_LINK',
+      message: 'Este link não está mais disponível para denúncia.',
+    }
+  }
+  if (result === 'not_found') {
+    return {
+      ok: false,
+      code: 'NOT_FOUND',
+      message: 'Este link não está mais disponível.',
+    }
+  }
+  return {
+    ok: false,
+    code: 'DATABASE_ERROR',
+    message: 'Não foi possível registrar a denúncia. Tente novamente.',
+  }
 }
 
 export async function adicionarLink(
   turmaId: string,
   url: string,
+  contactReference = '',
 ): Promise<TurmaActionResult> {
-  try {
-    const parsed = v.safeParse(adicionarLinkSchema, {
-      turmaId,
-      url,
-    })
+  const parsed = v.safeParse(adicionarLinkSchema, {
+    turmaId,
+    url,
+    contactReference,
+  })
 
-    if (!parsed.success) {
-      return {
-        ok: false,
-        message: parsed.issues[0]?.message ?? 'Dados inválidos.',
-      }
+  if (!parsed.success) {
+    return validationError(parsed.issues[0]?.message ?? 'Dados inválidos.')
+  }
+
+  if (parsed.output.contactReference.trim()) {
+    return honeypotResponse()
+  }
+
+  const fingerprint = await getFingerprint('add_link')
+  if (!fingerprint) {
+    return {
+      ok: false,
+      code: 'CONFIGURATION_ERROR',
+      message: 'Não foi possível concluir agora. Tente novamente mais tarde.',
     }
+  }
 
+  try {
     const supabase = await createClient()
-
-    const { error } = await supabase.from('links').insert({
-      turma_id: parsed.output.turmaId,
-      url_whatsapp: parsed.output.url,
+    const { data, error } = await supabase.rpc('add_link_secure', {
+      p_turma_id: parsed.output.turmaId,
+      p_url_whatsapp: parsed.output.url,
+      p_reporter_fingerprint: fingerprint,
     })
 
     if (error) {
-      if (error.code === '23505') {
-        return {
-          ok: false,
-          message: 'Esta turma já possui esse link cadastrado.',
-        }
+      if (error.code !== '22023') {
+        captureUnexpectedError(error, {
+          operation: 'adicionarLink.rpc',
+          subsystem: 'supabase',
+          tags: { database_error_code: error.code || 'unknown' },
+        })
       }
-
-      if (error.code === '23514') {
-        return {
-          ok: false,
-          message:
-            'Link inválido. Use um convite que comece com https://chat.whatsapp.com/',
-        }
-      }
-
-      captureUnexpectedError(error, {
-        operation: 'adicionarLink.insert',
-        subsystem: 'supabase',
-        tags: {
-          database_error_code: error.code || 'unknown',
-        },
+      writeSafeLog('error', {
+        event: 'add_link_failed',
+        code: error.code || 'DATABASE_ERROR',
+        resourceIdSuffix: getIdSuffix(parsed.output.turmaId),
+        environment: process.env.CONTEXT ?? process.env.NODE_ENV,
       })
-
-      return {
-        ok: false,
-        message: 'Não foi possível adicionar o link. Tente novamente.',
-      }
+      return mapAddResult(null)
     }
 
-    revalidatePath('/')
-
-    return {
-      ok: true,
-      message: 'Link adicionado com sucesso.',
-    }
+    const result = mapAddResult(data)
+    if (result.ok) revalidatePath('/')
+    return result
   } catch (error) {
     captureUnexpectedError(error, {
       operation: 'adicionarLink',
       subsystem: 'server-action',
     })
-
-    return {
-      ok: false,
-      message: 'Não foi possível adicionar o link. Tente novamente.',
-    }
+    writeSafeLog('error', {
+      event: 'add_link_failed',
+      code: 'UNEXPECTED_ERROR',
+      resourceIdSuffix: getIdSuffix(parsed.output.turmaId),
+      environment: process.env.CONTEXT ?? process.env.NODE_ENV,
+    })
+    return mapAddResult(null)
   }
 }
 
 export async function denunciarLink(
   linkId: string,
   motivo: string,
+  contactReference = '',
 ): Promise<TurmaActionResult> {
-  try {
-    const parsed = v.safeParse(denunciarLinkSchema, {
-      linkId,
-      motivo,
-    })
+  const parsed = v.safeParse(denunciarLinkSchema, {
+    linkId,
+    motivo,
+    contactReference,
+  })
 
-    if (!parsed.success) {
-      return {
-        ok: false,
-        message: parsed.issues[0]?.message ?? 'Dados inválidos.',
-      }
+  if (!parsed.success) {
+    return validationError(parsed.issues[0]?.message ?? 'Dados inválidos.')
+  }
+
+  if (parsed.output.contactReference.trim()) {
+    return honeypotResponse()
+  }
+
+  const fingerprint = await getFingerprint('report_link')
+  if (!fingerprint) {
+    return {
+      ok: false,
+      code: 'CONFIGURATION_ERROR',
+      message: 'Não foi possível concluir agora. Tente novamente mais tarde.',
     }
+  }
 
-    const headerStore = await headers()
-    const metadata = getReportMetadata(headerStore)
+  try {
     const supabase = await createClient()
-
-    const { error } = await supabase.rpc('incrementar_reports_link', {
+    const { data, error } = await supabase.rpc('report_link_secure', {
       p_link_id: parsed.output.linkId,
       p_motivo: parsed.output.motivo,
-      p_reporter_fingerprint: metadata.reporterFingerprint,
-      p_country_code: metadata.countryCode,
+      p_reporter_fingerprint: fingerprint,
     })
 
     if (error) {
-      if (!isExpectedReportError(error.code)) {
+      if (error.code !== '22023') {
         captureUnexpectedError(error, {
           operation: 'denunciarLink.rpc',
           subsystem: 'supabase',
-          tags: {
-            database_error_code: error.code || 'unknown',
-          },
+          tags: { database_error_code: error.code || 'unknown' },
         })
       }
-
-      return {
-        ok: false,
-        message: getReportErrorMessage(error.code),
-      }
+      writeSafeLog('error', {
+        event: 'report_link_failed',
+        code: error.code || 'DATABASE_ERROR',
+        resourceIdSuffix: getIdSuffix(parsed.output.linkId),
+        environment: process.env.CONTEXT ?? process.env.NODE_ENV,
+      })
+      return mapReportResult(null)
     }
 
-    revalidatePath('/')
-
-    return {
-      ok: true,
-      message: 'Denúncia registrada com sucesso.',
-    }
+    const result = mapReportResult(data)
+    if (result.ok) revalidatePath('/')
+    return result
   } catch (error) {
     captureUnexpectedError(error, {
       operation: 'denunciarLink',
       subsystem: 'server-action',
     })
-
-    return {
-      ok: false,
-      message: 'Não foi possível registrar a denúncia. Tente novamente.',
-    }
+    writeSafeLog('error', {
+      event: 'report_link_failed',
+      code: 'UNEXPECTED_ERROR',
+      resourceIdSuffix: getIdSuffix(parsed.output.linkId),
+      environment: process.env.CONTEXT ?? process.env.NODE_ENV,
+    })
+    return mapReportResult(null)
   }
 }

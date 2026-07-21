@@ -1,95 +1,46 @@
 # Roadmap
 
-## Critérios
+## Fase 0 — Base documental
 
-- segurança antes de escala;
-- regra de negócio protegida no banco;
-- entregas pequenas e verificáveis;
-- observabilidade antes de funcionalidades operacionais complexas.
-
-## Fase 0 — Base documental e integridade
-
-- [ ] adicionar `AGENTS.md`;
-- [ ] revisar e substituir o README atual;
-- [ ] confirmar modelo real das migrations;
-- [x] documentar variáveis em `.env.example`;
-- [x] confirmar scripts de lint, typecheck e testes;
+- [x] documentação arquitetural inicial;
+- [x] variáveis de ambiente exemplificadas;
 - [ ] escolher licença.
 
-## Fase 1 — Observabilidade e experiência
+## Fase 1 — Observabilidade e status — concluída
 
-- [ ] integrar Sentry no Next.js;
-- [ ] integrar Sentry no scraper;
-- [ ] confirmar Vercel Analytics no layout;
-- [ ] adicionar Speed Insights;
-- [ ] definir eventos de produto;
-- [x] criar página `/status`;
-  - [x] estado da aplicação, Supabase e sincronização;
-  - [x] contagens do semestre vigente;
-  - [x] detecção de dados desatualizados e execução abandonada;
-  - [x] endpoint mínimo `/api/health`;
-- [x] registrar execução do scraper;
-  - [x] migration versionada, RLS e grants mínimos;
-  - [x] início na extração e encerramento após o seed;
-  - [x] estados `running`, `success`, `partial` e `failed`;
-  - [x] testes de sanitização e permissões.
+- [x] Sentry no Next.js;
+- [x] Sentry no scraper;
+- [x] página `/status`;
+- [x] endpoint `/api/health`;
+- [x] registro das execuções do scraper;
+- [x] testes e RLS do status.
 
-> Os itens de Sentry, Analytics e Speed Insights só devem ser marcados após
-> confirmação no código e validação da configuração efetivamente publicada.
+Vercel Analytics e Speed Insights foram implementados na hospedagem anterior e posteriormente descontinuados devido à migração para o Netlify. A remoção não representa falha técnica. Eventos de produto continuam pendentes e não foram substituídos por GA4/GTM nesta fase.
 
 ## Fase 2 — Segurança e consistência
 
-- [ ] índice único parcial para um link ativo por turma;
-- [ ] transação para denúncia e desativação;
-- [ ] rate limiting;
-- [ ] honeypot;
-- [ ] revisão completa de RLS;
-- [ ] sanitização de logs;
-- [ ] cabeçalhos de segurança.
+- [x] índice único parcial para um link ativo por turma;
+- [x] saneamento determinístico de duplicados sem exclusão;
+- [x] cadastro de link por RPC transacional;
+- [x] denúncia, incremento e desativação em uma transação;
+- [x] rate limiting persistente no Supabase;
+- [x] fingerprint HMAC sem IP bruto;
+- [x] honeypot nos formulários de cadastro e denúncia;
+- [x] revisão de RLS e grants;
+- [x] sanitização de logs e Sentry;
+- [x] headers de segurança e CSP Report-Only;
+- [x] migração documental e técnica para Netlify;
+- [x] migrations e testes automatizados adicionados.
 
-## Fase 3 — Importação massiva CSV
+A marcação pressupõe aplicação da migration e validação final no preview antes do merge em produção.
 
-- [ ] definir layout do CSV;
-- [ ] disponibilizar modelo;
-- [ ] criar parser e schemas;
-- [ ] construir preview;
-- [ ] validação em lote no servidor;
-- [ ] relatório por linha;
-- [ ] eventos de analytics;
-- [ ] testes unitários, integração e E2E.
+## Fase 3 — Importação CSV — não iniciada
 
-Modelo sugerido:
+- [ ] layout e modelo de CSV;
+- [ ] preview e parser;
+- [ ] validação em lote;
+- [ ] relatório por linha.
 
-```csv
-codigo_disciplina,turma,semestre,link_whatsapp
-MAT001,010100,2026.1,https://chat.whatsapp.com/EXEMPLO
-```
+## Fases futuras
 
-O identificador interno pode ser aceito por integrações, mas o modelo público
-deve priorizar dados compreensíveis.
-
-## Fase 4 — Qualidade operacional
-
-- [ ] rotina de verificação de links;
-- [ ] tolerância a timeouts e falsos negativos;
-- [ ] painel administrativo autenticado;
-- [ ] trilha de auditoria;
-- [ ] métricas de cobertura por departamento;
-- [ ] backups e recuperação documentados.
-
-## Fase 5 — Evolução
-
-- [ ] avaliar OpenTelemetry;
-- [ ] avaliar backend OTEL, como SigNoz;
-- [ ] feature flags;
-- [ ] política de retenção de dados;
-- [ ] revisão de GTM e AdOpt somente se analytics/marketing exigir.
-
-## Fora de escopo por enquanto
-
-- autenticação obrigatória para consulta;
-- substituição do Supabase sem necessidade;
-- microserviços;
-- self-hosting de observabilidade;
-- GTM apenas para page views;
-- coleta de dados pessoais desnecessários.
+Verificação de links, painel autenticado, trilha administrativa e avaliação futura de OpenTelemetry permanecem fora da Fase 2.

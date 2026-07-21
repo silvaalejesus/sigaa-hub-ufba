@@ -26,6 +26,7 @@ const reportSchema = v.object({
     v.minLength(10, 'Explique o motivo com pelo menos 10 caracteres.'),
     v.maxLength(150, 'O motivo deve ter no máximo 150 caracteres.'),
   ),
+  contactReference: v.optional(v.string(), ''),
 })
 
 type ReportFormData = v.InferInput<typeof reportSchema>
@@ -38,7 +39,6 @@ interface ReportModalProps {
 export function ReportModal({ linkId, codigoTurma }: ReportModalProps) {
   const [open, setOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
-
   const {
     register,
     handleSubmit,
@@ -50,21 +50,15 @@ export function ReportModal({ linkId, codigoTurma }: ReportModalProps) {
   } = useForm<ReportFormData>({
     resolver: valibotResolver(reportSchema),
     mode: 'onChange',
-    defaultValues: {
-      motivo: '',
-    },
+    defaultValues: { motivo: '', contactReference: '' },
   })
 
   const motivo = watch('motivo') ?? ''
   const remaining = 150 - motivo.length
 
   function handleOpenChange(nextOpen: boolean) {
-    if (isPending) {
-      return
-    }
-
+    if (isPending) return
     setOpen(nextOpen)
-
     if (!nextOpen) {
       reset()
       clearErrors()
@@ -73,14 +67,14 @@ export function ReportModal({ linkId, codigoTurma }: ReportModalProps) {
 
   function onSubmit(data: ReportFormData) {
     startTransition(async () => {
-      const result = await denunciarLink(linkId, data.motivo)
+      const result = await denunciarLink(
+        linkId,
+        data.motivo,
+        data.contactReference ?? '',
+      )
 
       if (!result.ok) {
-        setError('root', {
-          type: 'server',
-          message: result.message,
-        })
-
+        setError('root', { type: 'server', message: result.message })
         toast.error(result.message)
         return
       }
@@ -95,18 +89,11 @@ export function ReportModal({ linkId, codigoTurma }: ReportModalProps) {
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
-        <Button
-          type="button"
-          size="icon"
-          variant="ghost"
-          title="Denunciar link"
-          aria-label={`Denunciar link da turma ${codigoTurma}`}
-          className="size-9 text-muted-foreground hover:text-destructive"
-        >
+        <Button variant="ghost" size="sm">
           <Flag className="size-4" />
+          Denunciar
         </Button>
       </DialogTrigger>
-
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Denunciar link da turma {codigoTurma}</DialogTitle>
@@ -115,36 +102,42 @@ export function ReportModal({ linkId, codigoTurma }: ReportModalProps) {
           </DialogDescription>
         </DialogHeader>
 
-        <form className="space-y-4" onSubmit={handleSubmit(onSubmit)}>
+        <form onSubmit={handleSubmit(onSubmit)} className="relative space-y-4">
+          <div
+            aria-hidden="true"
+            className="absolute left-[-10000px] top-auto h-px w-px overflow-hidden"
+          >
+            <label htmlFor={`contact-reference-report-modal-${linkId}`}>
+              Não preencha este campo
+            </label>
+            <input
+              id={`contact-reference-report-modal-${linkId}`}
+              type="text"
+              tabIndex={-1}
+              autoComplete="off"
+              {...register('contactReference')}
+            />
+          </div>
+
           <div className="space-y-2">
-            <label htmlFor={`report-${linkId}`} className="text-sm font-medium">
+            <label htmlFor={`report-reason-modal-${linkId}`} className="text-sm font-medium">
               Motivo da denúncia
             </label>
-
             <Textarea
-              id={`report-${linkId}`}
-              placeholder="Ex: link expirado, grupo incorreto, spam..."
+              id={`report-reason-modal-${linkId}`}
               maxLength={150}
               disabled={isPending}
-              aria-invalid={Boolean(errors.motivo)}
               {...register('motivo')}
             />
-
             <div className="flex items-center justify-between gap-3">
               <div>
                 {errors.motivo?.message && (
-                  <p className="text-sm text-destructive">
-                    {errors.motivo.message}
-                  </p>
+                  <p className="text-sm text-destructive">{errors.motivo.message}</p>
                 )}
-
                 {errors.root?.message && (
-                  <p className="text-sm text-destructive">
-                    {errors.root.message}
-                  </p>
+                  <p className="text-sm text-destructive">{errors.root.message}</p>
                 )}
               </div>
-
               <p className="shrink-0 text-xs text-muted-foreground">
                 {remaining} caracteres
               </p>
@@ -160,7 +153,6 @@ export function ReportModal({ linkId, codigoTurma }: ReportModalProps) {
             >
               Cancelar
             </Button>
-
             <Button type="submit" variant="destructive" disabled={!isValid || isPending}>
               {isPending && <Loader2 className="size-4 animate-spin" />}
               Enviar denúncia

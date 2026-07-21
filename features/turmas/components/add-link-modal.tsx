@@ -32,6 +32,7 @@ const addLinkSchema = v.object({
       'O link deve começar com https://chat.whatsapp.com/',
     ),
   ),
+  contactReference: v.optional(v.string(), ''),
 })
 
 type AddLinkFormData = v.InferInput<typeof addLinkSchema>
@@ -44,29 +45,22 @@ interface AddLinkModalProps {
 export function AddLinkModal({ turmaId, codigoTurma }: AddLinkModalProps) {
   const [open, setOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
-
   const {
     register,
     handleSubmit,
     reset,
     setError,
     clearErrors,
-    formState: { errors },
+    formState: { errors, isValid },
   } = useForm<AddLinkFormData>({
     resolver: valibotResolver(addLinkSchema),
     mode: 'onChange',
-    defaultValues: {
-      url: '',
-    },
+    defaultValues: { url: '', contactReference: '' },
   })
 
   function handleOpenChange(nextOpen: boolean) {
-    if (isPending) {
-      return
-    }
-
+    if (isPending) return
     setOpen(nextOpen)
-
     if (!nextOpen) {
       reset()
       clearErrors()
@@ -75,14 +69,14 @@ export function AddLinkModal({ turmaId, codigoTurma }: AddLinkModalProps) {
 
   function onSubmit(data: AddLinkFormData) {
     startTransition(async () => {
-      const result = await adicionarLink(turmaId, data.url)
+      const result = await adicionarLink(
+        turmaId,
+        data.url,
+        data.contactReference ?? '',
+      )
 
       if (!result.ok) {
-        setError('root', {
-          type: 'server',
-          message: result.message,
-        })
-
+        setError('root', { type: 'server', message: result.message })
         toast.error(result.message)
         return
       }
@@ -97,51 +91,53 @@ export function AddLinkModal({ turmaId, codigoTurma }: AddLinkModalProps) {
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
-        <Button type="button" size="sm" variant="outline">
+        <Button variant="outline" size="sm">
           <PlusCircle className="size-4" />
           Adicionar Link
         </Button>
       </DialogTrigger>
-
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Adicionar grupo da turma {codigoTurma}</DialogTitle>
           <DialogDescription>
-            Cole o link público do grupo do WhatsApp. O link precisa começar
-            com https://chat.whatsapp.com/.
+            Cole o link público do grupo do WhatsApp. O link precisa começar com
+            https://chat.whatsapp.com/.
           </DialogDescription>
         </DialogHeader>
 
-        <form className="space-y-4" onSubmit={handleSubmit(onSubmit)}>
+        <form onSubmit={handleSubmit(onSubmit)} className="relative space-y-4">
+          <div
+            aria-hidden="true"
+            className="absolute left-[-10000px] top-auto h-px w-px overflow-hidden"
+          >
+            <label htmlFor={`contact-reference-modal-${turmaId}`}>
+              Não preencha este campo
+            </label>
+            <input
+              id={`contact-reference-modal-${turmaId}`}
+              type="text"
+              tabIndex={-1}
+              autoComplete="off"
+              {...register('contactReference')}
+            />
+          </div>
+
           <div className="space-y-2">
-            <label
-              htmlFor={`whatsapp-url-${turmaId}`}
-              className="text-sm font-medium"
-            >
+            <label htmlFor={`whatsapp-link-modal-${turmaId}`} className="text-sm font-medium">
               Link de convite
             </label>
-
             <Input
-              id={`whatsapp-url-${turmaId}`}
-              type="url"
-              inputMode="url"
+              id={`whatsapp-link-modal-${turmaId}`}
               placeholder="https://chat.whatsapp.com/..."
               autoComplete="off"
-              aria-invalid={Boolean(errors.url)}
               disabled={isPending}
               {...register('url')}
             />
-
             {errors.url?.message && (
-              <p className="text-sm text-destructive">
-                {errors.url.message}
-              </p>
+              <p className="text-sm text-destructive">{errors.url.message}</p>
             )}
-
             {errors.root?.message && (
-              <p className="text-sm text-destructive">
-                {errors.root.message}
-              </p>
+              <p className="text-sm text-destructive">{errors.root.message}</p>
             )}
           </div>
 
@@ -154,8 +150,7 @@ export function AddLinkModal({ turmaId, codigoTurma }: AddLinkModalProps) {
             >
               Cancelar
             </Button>
-
-            <Button type="submit" disabled={isPending}>
+            <Button type="submit" disabled={!isValid || isPending}>
               {isPending && <Loader2 className="size-4 animate-spin" />}
               Salvar link
             </Button>

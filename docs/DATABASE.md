@@ -1,60 +1,23 @@
 # Banco de dados
 
-## Modelo real
+## Estruturas da Fase 2
 
-O schema atual usa:
+### `links`
 
-- `public.disciplinas`: `id`, `codigo`, `nome`, `departamento`, `created_at`;
-- `public.turmas`: `id`, `disciplina_id`, `codigo_turma`, `professor`,
-  `semestre`, `created_at`;
-- `public.links`: `id`, `turma_id`, `url_whatsapp`, `reports`, `is_active`,
-  `created_at`;
-- `public.link_reports`: denúncias, conforme script específico do projeto;
-- `public.scraper_runs`: histórico operacional da coleta e sincronização.
+Recebe `inactive_reason` e o índice parcial `one_active_link_per_class`. Duplicados ativos preexistentes são preservados, mas somente o mais recente permanece ativo; os demais recebem `deduplicated_active_link`.
 
-O semestre segue o formato `AAAA.P`, por exemplo `2026.1`.
+### `link_reports`
 
-## `public.scraper_runs`
+Mantém o motivo de negócio e o fingerprint HMAC. Não possui leitura/escrita pública. A antiga unicidade permanente por fingerprint/link é substituída por janela transacional de 24 horas.
 
-| Coluna | Uso |
-| --- | --- |
-| `id` | UUID da execução |
-| `status` | `running`, `success`, `partial` ou `failed` |
-| `trigger_source` | `manual`, `github_actions`, `local` ou `scheduled` |
-| `semester` | semestre coletado |
-| `started_at` / `finished_at` | janela da execução |
-| `departments_processed` | unidades concluídas |
-| `subjects_found` / `classes_found` | contagens da extração |
-| `subjects_upserted` / `classes_upserted` | contagens sincronizadas |
-| `error_code` | código estável e curto |
-| `error_message` | erro sanitizado, limitado a 1.000 caracteres |
-| `metadata` | objeto JSON operacional não sensível |
-| `created_at` | criação da linha |
+### `abuse_events`
 
-Constraints controlam estados, origem, formato do semestre, ordem temporal,
-contadores não negativos e limites de erro. Os índices atendem última execução,
-último sucesso, semestre e status.
+Tabela interna de eventos pseudonimizados. Armazena escopo, fingerprint, recurso opcional, resultado e timestamp; nunca IP, URL ou motivo. Retenção inicial de 30 dias.
 
-## Interface pública
+## Funções
 
-A tabela bruta não possui leitura pública. As funções abaixo expõem somente
-agregados seguros:
+- `add_link_secure(uuid, text, text)`;
+- `report_link_secure(uuid, text, text)`;
+- `cleanup_expired_abuse_events(interval, integer)` — apenas service role.
 
-- `get_public_scraper_status(text)`;
-- `count_public_subjects(text)`;
-- `count_public_classes(text)`;
-- `count_public_active_links(text)`;
-- `app_health_check()`.
-
-## Aplicação da migration
-
-Com Supabase CLI:
-
-```bash
-supabase link --project-ref SEU_PROJECT_REF
-supabase db push
-```
-
-Ou copie `supabase/migrations/202607140001_scraper_runs_status.sql` para o SQL
-Editor de um ambiente de desenvolvimento, revise e execute antes de produção.
-A migration é aditiva e não remove dados existentes.
+Todas usam `SECURITY DEFINER`, `search_path = ''`, nomes qualificados e grants explícitos.

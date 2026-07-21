@@ -1,23 +1,23 @@
-// This file configures the initialization of Sentry for edge features (middleware, edge routes, and so on).
-// The config you add here will be used whenever one of the edge features is loaded.
-// Note that this config is unrelated to the Vercel Edge Runtime and is also required when running locally.
-// https://docs.sentry.io/platforms/javascript/guides/nextjs/
+import * as Sentry from '@sentry/nextjs'
 
-import * as Sentry from "@sentry/nextjs";
+import {
+  getSentryEnvironment,
+  getSentryTracesSampleRate,
+  isSentryEnabled,
+  sanitizeSentryBreadcrumb,
+  sanitizeSentryEvent,
+} from '@/lib/observability/sentry-options'
+
+const enabled = isSentryEnabled()
 
 Sentry.init({
-  dsn: "https://39ba7d2ccbc2290f24652c89dbf28492@o4511736199249920.ingest.us.sentry.io/4511736473845760",
-
-  // Define how likely traces are sampled. Adjust this value in production, or use tracesSampler for greater control.
-  tracesSampleRate: 1,
-
-  // Enable logs to be sent to Sentry
-  enableLogs: true,
-
-  dataCollection: {
-    // To disable sending user data and HTTP bodies, uncomment the lines below. For more info visit:
-    // https://docs.sentry.io/platforms/javascript/guides/nextjs/configuration/options/#dataCollection
-    // userInfo: false,
-    // httpBodies: [],
-  },
-});
+  dsn: process.env.SENTRY_DSN ?? process.env.NEXT_PUBLIC_SENTRY_DSN,
+  enabled,
+  environment: getSentryEnvironment(),
+  sendDefaultPii: false,
+  enableLogs: false,
+  tracesSampleRate: enabled ? getSentryTracesSampleRate() : 0,
+  beforeSend: sanitizeSentryEvent,
+  beforeSendTransaction: sanitizeSentryEvent,
+  beforeBreadcrumb: sanitizeSentryBreadcrumb,
+})
