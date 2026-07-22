@@ -86,7 +86,7 @@ comment on column public.turmas.codigo_turma is
 'Código da turma, exemplo: T01.';
 
 comment on column public.turmas.semestre is
-'Semestre de oferta, exemplo: 2026.1.';
+'Semestre de oferta, exemplo: 2026.2.';
 
 create index if not exists idx_turmas_disciplina_id
 on public.turmas (disciplina_id);

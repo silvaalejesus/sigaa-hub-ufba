@@ -50,7 +50,7 @@ declare
   inserted_id uuid;
 begin
   insert into public.scraper_runs (status, trigger_source, semester)
-  values ('running', 'local', '2026.1')
+  values ('running', 'local', '2026.2')
   returning id into inserted_id;
 
   update public.scraper_runs

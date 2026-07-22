@@ -1,8 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import type { DisciplinaComTurmas } from "@/types/database";
 
-const SEMESTRE_VIGENTE = "2026.1";
-const MAX_RESULTADOS = 80;
+const SEMESTRE_VIGENTE = "2026.2";
+const MAX_RESULTADOS = 1000;
 
 export interface BuscarDisciplinasParams {
   query?: string;
@@ -66,6 +66,7 @@ export async function buscarDisciplinas({
 
   if (error) {
     console.error("[SIGAA Hub] Erro ao buscar disciplinas:", error.message);
+
     return [];
   }
 
@@ -93,12 +94,22 @@ export async function buscarDepartamentos(): Promise<string[]> {
 
   const { data, error } = await supabase
     .from("disciplinas")
-    .select("departamento")
+    .select(
+      `
+      departamento,
+      turmas!inner (
+        semestre
+      )
+    `,
+    )
+    .eq("turmas.semestre", SEMESTRE_VIGENTE)
     .not("departamento", "is", null)
-    .order("departamento", { ascending: true });
+    .order("departamento", { ascending: true })
+    .limit(5000);
 
   if (error) {
     console.error("[SIGAA Hub] Erro ao buscar departamentos:", error.message);
+
     return [];
   }
 

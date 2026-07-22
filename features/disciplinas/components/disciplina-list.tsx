@@ -1,12 +1,12 @@
-import { SearchX } from 'lucide-react'
+import { SearchX } from "lucide-react";
 
-import { DisciplinaCard } from '@/features/disciplinas/components/disciplina-card'
-import { buscarDisciplinas } from '@/features/disciplinas/queries'
+import { DisciplinaCard } from "@/features/disciplinas/components/disciplina-card";
+import { buscarDisciplinas } from "@/features/disciplinas/queries";
 
 interface DisciplinaListProps {
-  query?: string
-  departamento?: string
-  apenasComGrupos?: boolean
+  query?: string;
+  departamento?: string;
+  apenasComGrupos?: boolean;
 }
 
 export async function DisciplinaList({
@@ -18,12 +18,12 @@ export async function DisciplinaList({
     query,
     departamento,
     apenasComGrupos,
-  })
+  });
 
   const temFiltro =
     (query?.trim().length ?? 0) > 0 ||
     (departamento?.trim().length ?? 0) > 0 ||
-    apenasComGrupos
+    apenasComGrupos;
 
   if (disciplinas.length === 0) {
     return (
@@ -33,7 +33,7 @@ export async function DisciplinaList({
         departamento={departamento}
         apenasComGrupos={apenasComGrupos}
       />
-    )
+    );
   }
 
   return (
@@ -42,7 +42,7 @@ export async function DisciplinaList({
         <DisciplinaCard key={disciplina.id} disciplina={disciplina} />
       ))}
     </div>
-  )
+  );
 }
 
 function EmptyState({
@@ -51,10 +51,10 @@ function EmptyState({
   departamento,
   apenasComGrupos,
 }: {
-  hasFilter: boolean
-  query?: string
-  departamento?: string
-  apenasComGrupos?: boolean
+  hasFilter: boolean;
+  query?: string;
+  departamento?: string;
+  apenasComGrupos?: boolean;
 }) {
   return (
     <div className="rounded-3xl border border-dashed bg-muted/30 px-6 py-12 text-center">
@@ -64,12 +64,14 @@ function EmptyState({
 
       {hasFilter ? (
         <>
-          <h3 className="text-lg font-semibold">Nenhuma disciplina encontrada</h3>
+          <h3 className="text-lg font-semibold">
+            Nenhuma disciplina encontrada
+          </h3>
           <p className="mx-auto mt-2 max-w-xl text-sm text-muted-foreground">
             Não encontramos disciplinas para os filtros aplicados
-            {query ? `, busca "${query}"` : ''}
-            {departamento ? `, departamento "${departamento}"` : ''}
-            {apenasComGrupos ? ', apenas com grupos disponíveis' : ''}.
+            {query ? `, busca "${query}"` : ""}
+            {departamento ? `, departamento "${departamento}"` : ""}
+            {apenasComGrupos ? ", apenas com grupos disponíveis" : ""}.
           </p>
         </>
       ) : (
@@ -77,10 +79,10 @@ function EmptyState({
           <h3 className="text-lg font-semibold">Comece pela busca</h3>
           <p className="mx-auto mt-2 max-w-xl text-sm text-muted-foreground">
             Digite o nome ou o código de uma disciplina para ver as turmas
-            abertas no semestre 2026.1 e os grupos de WhatsApp disponíveis.
+            abertas no semestre 2026.2 e os grupos de WhatsApp disponíveis.
           </p>
         </>
       )}
     </div>
-  )
+  );
 }

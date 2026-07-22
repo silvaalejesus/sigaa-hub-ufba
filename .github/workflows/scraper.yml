@@ -39,8 +39,8 @@ jobs:
       - name: Instalar Chromium do Playwright
         run: python -m playwright install --with-deps chromium
 
-      - name: Extrair dados públicos do SIGAA
-        run: python scraper.py --output dados_sigaa.json
+      - name: Extrair dados públicos do SIGAA — 2026.2
+        run: python scraper.py --ano 2026 --periodo 2 --output dados_sigaa.json
 
       - name: Sincronizar dados no Supabase
         run: python seed.py --input dados_sigaa.json
@@ -49,7 +49,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: dados-sigaa-${{ github.run_number }}
+          name: dados-sigaa-2026-2-${{ github.run_number }}
           path: |
             scraper/dados_sigaa.json
             scraper/debug_sigaa/
