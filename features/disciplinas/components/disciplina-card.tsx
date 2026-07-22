@@ -113,7 +113,6 @@ export function DisciplinaCard({ disciplina }: DisciplinaCardProps) {
       </article>
 
       <Dialog
-        modal
         open={open}
         onOpenChange={(nextOpen) => {
           setOpen(nextOpen);
