@@ -22,3 +22,6 @@ venv
 
 # Estado efêmero entre extração e seed
 scraper/.scraper_run_state.json
+
+*\.temp
+next-env.d.t

@@ -1,5 +1,5 @@
-import { CURRENT_SEMESTER } from "@/lib/semester";
 import { reportServerError } from "@/lib/observability/report-server-error";
+import { CURRENT_SEMESTER } from "@/lib/semester";
 import { createPublicServerClient } from "@/lib/supabase/public-server";
 import type {
   PublicSystemStatus,
@@ -45,16 +45,16 @@ export async function getPublicSystemStatus(): Promise<PublicSystemStatus> {
         supabase.rpc("app_health_check"),
         supabase.rpc("get_public_scraper_status", {
           p_semester: CURRENT_SEMESTER,
-        }),
+        } as unknown as undefined),
         supabase.rpc("count_public_subjects", {
           p_semester: CURRENT_SEMESTER,
-        }),
+        } as unknown as undefined),
         supabase.rpc("count_public_classes", {
           p_semester: CURRENT_SEMESTER,
-        }),
+        } as unknown as undefined),
         supabase.rpc("count_public_active_links", {
           p_semester: CURRENT_SEMESTER,
-        }),
+        } as unknown as undefined),
       ]);
 
     const healthError = getQueryError(health);
@@ -75,7 +75,8 @@ export async function getPublicSystemStatus(): Promise<PublicSystemStatus> {
     if (healthFailed) {
       reportQueryFailure(
         "health_check",
-        healthError ?? new Error("Health check público retornou resposta inválida."),
+        healthError ??
+          new Error("Health check público retornou resposta inválida."),
       );
     }
     if (scraperFailed) reportQueryFailure("scraper_status", scraperError);
@@ -87,13 +88,18 @@ export async function getPublicSystemStatus(): Promise<PublicSystemStatus> {
 
     const scraperRow =
       !scraperFailed && scraper.status === "fulfilled"
-        ? (scraper.value.data?.[0] ?? null)
+        ? ((scraper.value.data?.[0] as
+            | Record<string, unknown>
+            | null
+            | undefined) ?? null)
         : null;
 
     const lastRunStatus =
       (scraperRow?.last_run_status as ScraperRunStatus | null) ?? null;
-    const lastRunStartedAt = scraperRow?.last_run_started_at ?? null;
-    const lastRunFinishedAt = scraperRow?.last_run_finished_at ?? null;
+    const lastRunStartedAt =
+      (scraperRow?.last_run_started_at as string | null) ?? null;
+    const lastRunFinishedAt =
+      (scraperRow?.last_run_finished_at as string | null) ?? null;
     const abandoned = isAbandonedRun({
       status: lastRunStatus,
       startedAt: lastRunStartedAt,
@@ -103,7 +109,8 @@ export async function getPublicSystemStatus(): Promise<PublicSystemStatus> {
     const databaseAvailable = !healthFailed;
     const hasPartialQueryFailure =
       scraperFailed || subjectsFailed || classesFailed || activeLinksFailed;
-    const lastSuccessfulSyncAt = scraperRow?.last_successful_sync_at ?? null;
+    const lastSuccessfulSyncAt =
+      (scraperRow?.last_successful_sync_at as string | null) ?? null;
 
     const overall = calculateOverallStatus({
       databaseAvailable,
@@ -150,12 +157,13 @@ export async function getPublicSystemStatus(): Promise<PublicSystemStatus> {
             : null,
       },
       lastSuccessfulSyncAt,
-      lastSuccessfulDurationSeconds:
-        scraperRow?.last_successful_duration_seconds ?? null,
+      lastSuccessfulDurationSeconds: toNullableCount(
+        (scraperRow?.last_successful_duration_seconds as number | null) ?? null,
+      ),
       lastRun: scraperRow
         ? {
             status: lastRunStatus,
-            semester: scraperRow.last_run_semester,
+            semester: (scraperRow.last_run_semester as string | null) ?? null,
             startedAt: lastRunStartedAt,
             finishedAt: lastRunFinishedAt,
             durationSeconds:
