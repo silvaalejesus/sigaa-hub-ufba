@@ -11,10 +11,10 @@ Versão multiunidade:
 - Continua a execução mesmo se uma unidade falhar.
 
 Uso básico:
-    python scraper.py --ano 2026 --periodo 1
+    python scraper.py --ano 2026 --periodo 2
 
 Uso com navegador visível para depuração:
-    python scraper.py --ano 2026 --periodo 1 --headful --slow-mo 300 --debug-html
+    python scraper.py --ano 2026 --periodo 2 --headful --slow-mo 300 --debug-html
 
 Dependências:
     pip install playwright
@@ -137,9 +137,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--ano", default="2026", help="Ano do semestre. Exemplo: 2026")
     parser.add_argument(
         "--periodo",
-        default="1",
+        default="2",
         choices=["1", "2", "3", "4"],
-        help="Período acadêmico. Exemplo: 1 para 2026.1",
+        help="Período acadêmico. Exemplo: 1 para 2026.2",
     )
     parser.add_argument("--nivel", default=DEFAULT_NIVEL, help="Nível de ensino. Exemplo: GRADUAÇÃO")
     parser.add_argument("--output", default="dados_sigaa.json", help="Arquivo JSON de saída.")
