@@ -19,3 +19,8 @@ Mensagens SQL, constraints, fingerprints, IPs, motivos e URLs nunca são devolvi
 - cadastro: 5 tentativas/hora e 2 sucessos/24h por fingerprint;
 - denúncia: 10 tentativas/hora e 1 denúncia por link/24h por fingerprint;
 - retenção: 30 dias, com limpeza oportunista em lotes e função operacional para service role.
+
+<!-- post-phase2-functional-fixes-2026-07-21 -->
+## RPCs públicas pós-Fase 2
+
+`add_link_secure(uuid,text,text)` retorna `added`, `active_link_exists`, `url_already_registered`, `rate_limited` ou `not_found`. `report_link_secure(uuid,text,text)` retorna tabela com `result_status`, `reports_count` e `is_active`. A denúncia permanece uma transação única.

@@ -36,3 +36,14 @@ supabase/migrations/20260717010000_phase2_security.sql
 ```
 
 Ela não deve ser aplicada em produção antes de backup, revisão do saneamento de links ativos duplicados e validação em ambiente de desenvolvimento.
+
+<!-- post-phase2-functional-fixes-2026-07-21 -->
+## Correções funcionais pós-Fase 2
+
+- links que atingem três denúncias são desativados, não excluídos;
+- um novo convite diferente pode ser cadastrado após a desativação;
+- a interface mostra a contagem real de `0 de 3` a `2 de 3`;
+- feedbacks são enviados pelo Netlify Forms;
+- diálogos usam modalização explícita e fallback centralizado de scroll lock.
+
+A Fase 3 permanece não iniciada.

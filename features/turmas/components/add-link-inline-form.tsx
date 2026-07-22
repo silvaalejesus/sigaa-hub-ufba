@@ -1,8 +1,9 @@
 'use client'
 
-import { useTransition } from 'react'
 import { valibotResolver } from '@hookform/resolvers/valibot'
 import { Loader2, PlusCircle, X } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { useTransition } from 'react'
 import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
 import * as v from 'valibot'
@@ -42,6 +43,7 @@ export function AddLinkInlineForm({
   onCancel,
   onSuccess,
 }: AddLinkInlineFormProps) {
+  const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const {
     register,
@@ -72,23 +74,34 @@ export function AddLinkInlineForm({
       toast.success(result.message)
       reset()
       onSuccess()
+      router.refresh()
     })
   }
 
   return (
     <form
       onSubmit={handleSubmit(onSubmit)}
-      className="relative rounded-lg border bg-muted/20 p-4"
+      className="mt-4 rounded-xl border bg-muted/30 p-4"
     >
-      <div
-        aria-hidden="true"
-        className="absolute left-[-10000px] top-auto h-px w-px overflow-hidden"
-      >
-        <label htmlFor={`contact-reference-${turmaId}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-medium">Adicionar link da turma {codigoTurma}</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Cole um link público iniciado por https://chat.whatsapp.com/.
+          </p>
+        </div>
+        <Button type="button" variant="ghost" size="icon-sm" onClick={onCancel}>
+          <X className="size-4" />
+          <span className="sr-only">Cancelar cadastro</span>
+        </Button>
+      </div>
+
+      <div aria-hidden="true" className="absolute -left-[10000px] h-px w-px overflow-hidden">
+        <label htmlFor={`contact-reference-add-${turmaId}`}>
           Não preencha este campo
         </label>
         <input
-          id={`contact-reference-${turmaId}`}
+          id={`contact-reference-add-${turmaId}`}
           type="text"
           tabIndex={-1}
           autoComplete="off"
@@ -96,34 +109,17 @@ export function AddLinkInlineForm({
         />
       </div>
 
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="font-medium">Adicionar link da turma {codigoTurma}</p>
-          <p className="text-sm text-muted-foreground">
-            Cole um link público iniciado por https://chat.whatsapp.com/.
-          </p>
-        </div>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          disabled={isPending}
-          onClick={onCancel}
-          aria-label="Cancelar cadastro do link"
-        >
-          <X className="size-4" />
-        </Button>
-      </div>
-
       <div className="mt-3 space-y-2">
-        <label htmlFor={`whatsapp-link-${turmaId}`} className="text-sm font-medium">
+        <label htmlFor={`whatsapp-url-${turmaId}`} className="text-xs font-medium">
           Link de convite do WhatsApp
         </label>
         <Input
-          id={`whatsapp-link-${turmaId}`}
-          placeholder="https://chat.whatsapp.com/..."
+          id={`whatsapp-url-${turmaId}`}
+          type="url"
+          inputMode="url"
           autoComplete="off"
-          disabled={isPending}
+          placeholder="https://chat.whatsapp.com/..."
+          aria-invalid={Boolean(errors.url)}
           {...register('url')}
         />
         {errors.url?.message && (

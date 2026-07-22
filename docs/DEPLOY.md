@@ -38,3 +38,9 @@ Teste cadastro, duplicidade, três denúncias, rate limit, honeypot, temas, mobi
 ## Rate limiting da plataforma
 
 O Netlify permite regras para funções, mas Server Actions do Next.js usam caminhos internos gerados pelo adaptador. Não são criados limites frágeis baseados nesses caminhos. A proteção de negócio permanece no Supabase. Uma regra adicional para `/api/health` só deve ser adicionada após medir o monitoramento legítimo.
+
+<!-- post-phase2-functional-fixes-2026-07-21 -->
+## Ativação do Netlify Forms
+
+Após o deploy que contém `public/__forms.html`, habilite **Forms → Enable form detection** e redeploy. Configure a notificação em **Configuration → Notifications → Form submission notifications → Add notification → Email notification**, selecionando `sigaa-hub-feedback`. Valide `curl -I URL/__forms.html`, Verified submissions e recebimento do e-mail.
+Confirme também **Forms → Usage**: planos atuais por créditos incluem Forms sem limite próprio; contas Free legadas podem manter limites metered.

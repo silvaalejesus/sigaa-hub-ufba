@@ -84,3 +84,8 @@ build
 ```
 
 Adicionar scanner de segredos e auditoria de dependências quando possível.
+
+<!-- post-phase2-functional-fixes-2026-07-21 -->
+## Cenários pós-Fase 2
+
+Execute a migration em banco local/desenvolvimento e rode `supabase/tests/post_phase2_functional_fixes.sql`. Valide as três contagens, preservação do link, bloqueio da quarta denúncia, novo convite, URL histórica, RLS, scroll lock, contadores e Netlify Forms. Use origens/fingerprints de teste distintas sem enfraquecer produção.

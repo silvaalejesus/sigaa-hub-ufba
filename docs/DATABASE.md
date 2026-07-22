@@ -21,3 +21,8 @@ Tabela interna de eventos pseudonimizados. Armazena escopo, fingerprint, recurso
 - `cleanup_expired_abuse_events(interval, integer)` — apenas service role.
 
 Todas usam `SECURITY DEFINER`, `search_path = ''`, nomes qualificados e grants explícitos.
+
+<!-- post-phase2-functional-fixes-2026-07-21 -->
+## Desativação versus exclusão
+
+Na terceira denúncia, a linha de `links` permanece armazenada com `reports = 3`, `is_active = false` e `inactive_reason = 'reports_threshold'`. O índice `one_active_link_per_class` é parcial (`where is_active is true`), portanto históricos inativos não bloqueiam um novo convite diferente. `idx_links_unique_turma_url` continua impedindo a repetição do mesmo convite exato.

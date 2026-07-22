@@ -1,5 +1,6 @@
--- Testes transacionais da Fase 2.
--- Execute apenas em um banco Supabase de desenvolvimento após aplicar a migration.
+-- Testes transacionais da Fase 2, atualizados para o contrato estruturado
+-- introduzido pelas correções pós-Fase 2.
+-- Execute apenas em banco Supabase local/de desenvolvimento.
 
 begin;
 
@@ -158,46 +159,65 @@ grant select on table pg_temp.phase2_target_link to anon;
 
 set local role anon;
 
--- Três denúncias distintas desativam atomicamente.
+-- Três denúncias distintas desativam atomicamente e retornam a contagem real.
 do $$
 declare
   target_link uuid;
-  result_one text;
-  result_two text;
-  result_three text;
+  result_one record;
+  result_two record;
+  result_three record;
+  result_four record;
 begin
   select link_id into target_link from pg_temp.phase2_target_link limit 1;
 
-  result_one := public.report_link_secure(
+  select * into result_one from public.report_link_secure(
     target_link,
     'Motivo válido para o primeiro teste.',
     repeat('c', 64)
   );
-  result_two := public.report_link_secure(
+  select * into result_two from public.report_link_secure(
     target_link,
     'Motivo válido para o segundo teste.',
     repeat('d', 64)
   );
-  result_three := public.report_link_secure(
+  select * into result_three from public.report_link_secure(
     target_link,
     'Motivo válido para o terceiro teste.',
     repeat('e', 64)
   );
 
-  if result_one <> 'reported' or result_two <> 'reported' then
-    raise exception 'Falha nas primeiras denúncias: %, %.', result_one, result_two;
+  if result_one.result_status <> 'reported'
+    or result_one.reports_count <> 1
+    or result_one.is_active is not true
+  then
+    raise exception 'Falha na primeira denúncia: %.', row_to_json(result_one);
   end if;
 
-  if result_three <> 'deactivated' then
-    raise exception 'Falha: terceira denúncia retornou %.', result_three;
+  if result_two.result_status <> 'reported'
+    or result_two.reports_count <> 2
+    or result_two.is_active is not true
+  then
+    raise exception 'Falha na segunda denúncia: %.', row_to_json(result_two);
   end if;
 
-  if public.report_link_secure(
+  if result_three.result_status <> 'deactivated'
+    or result_three.reports_count <> 3
+    or result_three.is_active is not false
+  then
+    raise exception 'Falha na terceira denúncia: %.', row_to_json(result_three);
+  end if;
+
+  select * into result_four from public.report_link_secure(
     target_link,
     'Tentativa contra link já inativo.',
     repeat('f', 64)
-  ) <> 'inactive' then
-    raise exception 'Falha: link inativo aceitou nova denúncia.';
+  );
+
+  if result_four.result_status <> 'inactive'
+    or result_four.reports_count <> 3
+    or result_four.is_active is not false
+  then
+    raise exception 'Falha: link inativo aceitou nova denúncia: %.', row_to_json(result_four);
   end if;
 end;
 $$;

@@ -44,3 +44,8 @@ A marcação pressupõe aplicação da migration e validação final no preview 
 ## Fases futuras
 
 Verificação de links, painel autenticado, trilha administrativa e avaliação futura de OpenTelemetry permanecem fora da Fase 2.
+
+<!-- post-phase2-functional-fixes-2026-07-21 -->
+## Correções pós-Fase 2
+
+Esta rodada corrige consistência, retorno visual, scroll de overlays e envio de feedback. Ela não inicia nem antecipa a Fase 3.

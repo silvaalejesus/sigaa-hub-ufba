@@ -61,3 +61,14 @@ A implementação real deve ser confirmada no código antes de marcar um item co
 - aviso de independência;
 - política de privacidade;
 - termos de uso, quando necessários.
+
+<!-- post-phase2-functional-fixes-2026-07-21 -->
+# Funcionalidades
+
+## Moderação colaborativa
+
+Cada link ativo mostra a contagem de denúncias. A terceira denúncia o remove temporariamente da listagem, preserva o histórico e libera a turma para um novo convite diferente. A mensagem de análise representa o fluxo planejado; não existe painel administrativo nesta fase.
+
+## Feedback
+
+O formulário público usa Netlify Forms, honeypot e validação Valibot. As notificações por e-mail são configuradas no painel do Netlify.

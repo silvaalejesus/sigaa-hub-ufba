@@ -4,6 +4,19 @@ import { revalidatePath } from 'next/cache'
 import { headers } from 'next/headers'
 import * as v from 'valibot'
 
+import {
+  databaseFailure,
+  mapAddRpcResult,
+  mapReportRpcResult,
+  parseReportRpcRow,
+  type AddLinkActionResult,
+  type ReportLinkActionResult,
+  type TurmaActionFailure,
+} from '@/features/turmas/action-results'
+import {
+  REPORT_REASON_MAX_LENGTH,
+  REPORT_REASON_MIN_LENGTH,
+} from '@/features/turmas/constants'
 import { captureUnexpectedError } from '@/lib/observability/capture-unexpected-error'
 import { getIdSuffix, writeSafeLog } from '@/lib/observability/safe-logger'
 import { createAbuseFingerprint } from '@/lib/security/abuse-fingerprint'
@@ -36,46 +49,33 @@ const denunciarLinkSchema = v.object({
   motivo: v.pipe(
     v.string(),
     v.trim(),
-    v.minLength(10, 'Informe um motivo com pelo menos 10 caracteres.'),
-    v.maxLength(150, 'O motivo deve ter no máximo 150 caracteres.'),
+    v.minLength(
+      REPORT_REASON_MIN_LENGTH,
+      `Informe um motivo com pelo menos ${REPORT_REASON_MIN_LENGTH} caracteres.`,
+    ),
+    v.maxLength(
+      REPORT_REASON_MAX_LENGTH,
+      `O motivo deve ter no máximo ${REPORT_REASON_MAX_LENGTH} caracteres.`,
+    ),
   ),
   contactReference: honeypotSchema,
 })
 
-export type TurmaActionCode =
-  | 'ADDED'
-  | 'REPORTED'
-  | 'DEACTIVATED'
-  | 'VALIDATION_ERROR'
-  | 'ACTIVE_LINK_EXISTS'
-  | 'RATE_LIMITED'
-  | 'DUPLICATE_REPORT'
-  | 'INACTIVE_LINK'
-  | 'NOT_FOUND'
-  | 'HONEYPOT_TRIGGERED'
-  | 'CONFIGURATION_ERROR'
-  | 'DATABASE_ERROR'
-
-export type TurmaActionResult =
-  | { ok: true; code: TurmaActionCode; message: string }
-  | { ok: false; code: TurmaActionCode; message: string }
-
-function validationError(message: string): TurmaActionResult {
+function validationFailure(message: string): TurmaActionFailure {
   return { ok: false, code: 'VALIDATION_ERROR', message }
 }
 
-function honeypotResponse(): TurmaActionResult {
+function honeypotFailure(): TurmaActionFailure {
   writeSafeLog('warn', {
     event: 'public_form_rejected',
     code: 'HONEYPOT_TRIGGERED',
     environment: process.env.CONTEXT ?? process.env.NODE_ENV,
   })
 
-  // Resposta deliberadamente genérica para não confirmar o mecanismo ao bot.
   return {
-    ok: true,
+    ok: false,
     code: 'HONEYPOT_TRIGGERED',
-    message: 'Solicitação recebida.',
+    message: 'Não foi possível concluir a solicitação.',
   }
 }
 
@@ -97,96 +97,15 @@ async function getFingerprint(
     code: result.code,
     environment: process.env.CONTEXT ?? process.env.NODE_ENV,
   })
+
   return null
-}
-
-function mapAddResult(result: unknown): TurmaActionResult {
-  if (result === 'added') {
-    return { ok: true, code: 'ADDED', message: 'Link adicionado com sucesso.' }
-  }
-  if (result === 'active_link_exists') {
-    return {
-      ok: false,
-      code: 'ACTIVE_LINK_EXISTS',
-      message: 'Esta turma já possui um grupo ativo.',
-    }
-  }
-  if (result === 'rate_limited') {
-    return {
-      ok: false,
-      code: 'RATE_LIMITED',
-      message: 'Não foi possível concluir agora. Tente novamente mais tarde.',
-    }
-  }
-  if (result === 'not_found') {
-    return {
-      ok: false,
-      code: 'NOT_FOUND',
-      message: 'A turma informada não está disponível.',
-    }
-  }
-  return {
-    ok: false,
-    code: 'DATABASE_ERROR',
-    message: 'Não foi possível adicionar o link. Tente novamente.',
-  }
-}
-
-function mapReportResult(result: unknown): TurmaActionResult {
-  if (result === 'reported') {
-    return {
-      ok: true,
-      code: 'REPORTED',
-      message: 'Denúncia registrada com sucesso.',
-    }
-  }
-  if (result === 'deactivated') {
-    return {
-      ok: true,
-      code: 'DEACTIVATED',
-      message: 'Denúncia registrada. O link foi desativado para revisão.',
-    }
-  }
-  if (result === 'duplicate') {
-    return {
-      ok: false,
-      code: 'DUPLICATE_REPORT',
-      message: 'Esta conexão já enviou uma denúncia recente para este link.',
-    }
-  }
-  if (result === 'rate_limited') {
-    return {
-      ok: false,
-      code: 'RATE_LIMITED',
-      message: 'Não foi possível concluir agora. Tente novamente mais tarde.',
-    }
-  }
-  if (result === 'inactive') {
-    return {
-      ok: false,
-      code: 'INACTIVE_LINK',
-      message: 'Este link não está mais disponível para denúncia.',
-    }
-  }
-  if (result === 'not_found') {
-    return {
-      ok: false,
-      code: 'NOT_FOUND',
-      message: 'Este link não está mais disponível.',
-    }
-  }
-  return {
-    ok: false,
-    code: 'DATABASE_ERROR',
-    message: 'Não foi possível registrar a denúncia. Tente novamente.',
-  }
 }
 
 export async function adicionarLink(
   turmaId: string,
   url: string,
   contactReference = '',
-): Promise<TurmaActionResult> {
+): Promise<AddLinkActionResult> {
   const parsed = v.safeParse(adicionarLinkSchema, {
     turmaId,
     url,
@@ -194,12 +113,10 @@ export async function adicionarLink(
   })
 
   if (!parsed.success) {
-    return validationError(parsed.issues[0]?.message ?? 'Dados inválidos.')
+    return validationFailure(parsed.issues[0]?.message ?? 'Dados inválidos.')
   }
 
-  if (parsed.output.contactReference.trim()) {
-    return honeypotResponse()
-  }
+  if (parsed.output.contactReference.trim()) return honeypotFailure()
 
   const fingerprint = await getFingerprint('add_link')
   if (!fingerprint) {
@@ -232,10 +149,10 @@ export async function adicionarLink(
         resourceIdSuffix: getIdSuffix(parsed.output.turmaId),
         environment: process.env.CONTEXT ?? process.env.NODE_ENV,
       })
-      return mapAddResult(null)
+      return databaseFailure('Não foi possível adicionar o link. Tente novamente.')
     }
 
-    const result = mapAddResult(data)
+    const result = mapAddRpcResult(data)
     if (result.ok) revalidatePath('/')
     return result
   } catch (error) {
@@ -249,7 +166,7 @@ export async function adicionarLink(
       resourceIdSuffix: getIdSuffix(parsed.output.turmaId),
       environment: process.env.CONTEXT ?? process.env.NODE_ENV,
     })
-    return mapAddResult(null)
+    return databaseFailure('Não foi possível adicionar o link. Tente novamente.')
   }
 }
 
@@ -257,7 +174,7 @@ export async function denunciarLink(
   linkId: string,
   motivo: string,
   contactReference = '',
-): Promise<TurmaActionResult> {
+): Promise<ReportLinkActionResult> {
   const parsed = v.safeParse(denunciarLinkSchema, {
     linkId,
     motivo,
@@ -265,12 +182,10 @@ export async function denunciarLink(
   })
 
   if (!parsed.success) {
-    return validationError(parsed.issues[0]?.message ?? 'Dados inválidos.')
+    return validationFailure(parsed.issues[0]?.message ?? 'Dados inválidos.')
   }
 
-  if (parsed.output.contactReference.trim()) {
-    return honeypotResponse()
-  }
+  if (parsed.output.contactReference.trim()) return honeypotFailure()
 
   const fingerprint = await getFingerprint('report_link')
   if (!fingerprint) {
@@ -303,10 +218,23 @@ export async function denunciarLink(
         resourceIdSuffix: getIdSuffix(parsed.output.linkId),
         environment: process.env.CONTEXT ?? process.env.NODE_ENV,
       })
-      return mapReportResult(null)
+      return databaseFailure(
+        'Não foi possível registrar a denúncia. Tente novamente.',
+      )
     }
 
-    const result = mapReportResult(data)
+    const row = parseReportRpcRow(data)
+    if (!row) {
+      captureUnexpectedError(new Error('Invalid report RPC response'), {
+        operation: 'denunciarLink.response',
+        subsystem: 'supabase',
+      })
+      return databaseFailure(
+        'Não foi possível registrar a denúncia. Tente novamente.',
+      )
+    }
+
+    const result = mapReportRpcResult(row)
     if (result.ok) revalidatePath('/')
     return result
   } catch (error) {
@@ -320,6 +248,8 @@ export async function denunciarLink(
       resourceIdSuffix: getIdSuffix(parsed.output.linkId),
       environment: process.env.CONTEXT ?? process.env.NODE_ENV,
     })
-    return mapReportResult(null)
+    return databaseFailure(
+      'Não foi possível registrar a denúncia. Tente novamente.',
+    )
   }
 }

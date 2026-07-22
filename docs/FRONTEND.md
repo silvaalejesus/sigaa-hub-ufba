@@ -90,3 +90,8 @@ O cliente pode fazer pré-validação, mas o servidor deve repetir todas as veri
 - Contraste adequado nos dois temas.
 - Operação completa por teclado.
 - Não comunicar status apenas por cor.
+
+<!-- post-phase2-functional-fixes-2026-07-21 -->
+## Contagem, atualização e overlays
+
+Links ativos exibem `reports` como texto acessível. A terceira denúncia apresenta toast prolongado, atualiza o estado local, fecha o formulário e executa `router.refresh()`. Os diálogos usam `modal` explicitamente; `useBodyScrollLock` preserva posição, largura da scrollbar e suporta overlays aninhados.

@@ -54,3 +54,16 @@ pnpm build
 pnpm supabase db lint
 pnpm audit
 ```
+
+<!-- post-phase2-functional-fixes-2026-07-21 -->
+## Netlify Forms — feedback
+
+O build inclui `public/__forms.html` para detecção estática. No painel do Netlify:
+
+1. **Forms → Enable form detection**;
+2. faça um novo deploy;
+3. confirme o formulário `sigaa-hub-feedback`;
+4. em **Configuration → Notifications → Form submission notifications**, adicione uma notificação por e-mail para esse formulário.
+
+O endereço destinatário é configurado somente no painel e não deve ser commitado.
+No modelo atual de planos por créditos, Forms não possui cobrança ou limite próprio. Contas antigas no Free legado podem continuar sujeitas ao modelo metered; confirme **Forms → Usage** no painel.

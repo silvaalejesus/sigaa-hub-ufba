@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types --test features/status/utils.test.ts features/status/health.test.ts lib/security/abuse-fingerprint.test.ts lib/security/security-headers.test.mjs lib/observability/safe-logger.test.ts"
+    "test": "node --experimental-strip-types --test features/status/utils.test.ts features/status/health.test.ts lib/security/abuse-fingerprint.test.ts lib/security/security-headers.test.mjs lib/observability/safe-logger.test.ts features/turmas/action-results.test.ts features/turmas/actions-source.test.ts features/feedback/netlify-forms.test.ts lib/forms/character-count.test.ts lib/hooks/body-scroll-lock-state.test.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",

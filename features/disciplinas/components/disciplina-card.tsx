@@ -7,7 +7,7 @@ import {
   MessageCirclePlus,
   Users,
 } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
@@ -17,8 +17,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import type { ReportLinkSuccess } from "@/features/turmas/action-results";
 import { AddLinkInlineForm } from "@/features/turmas/components/add-link-inline-form";
 import { ReportInlineForm } from "@/features/turmas/components/report-inline-form";
+import { REPORTS_DEACTIVATION_THRESHOLD } from "@/features/turmas/constants";
+import { useBodyScrollLock } from "@/lib/hooks/use-body-scroll-lock";
 import { cn } from "@/lib/utils";
 import type { DisciplinaComTurmas } from "@/types/database";
 
@@ -26,16 +29,33 @@ interface DisciplinaCardProps {
   disciplina: DisciplinaComTurmas;
 }
 
+type LinkOverride = {
+  reports: number;
+  isActive: boolean;
+};
+
 export function DisciplinaCard({ disciplina }: DisciplinaCardProps) {
   const [open, setOpen] = useState(false);
   const [editingTurmaId, setEditingTurmaId] = useState<string | null>(null);
   const [reportingLinkId, setReportingLinkId] = useState<string | null>(null);
+  const [linkOverrides, setLinkOverrides] = useState<
+    Record<string, LinkOverride>
+  >({});
+  useBodyScrollLock(open);
 
   const totalTurmas = disciplina.turmas.length;
-  const totalLinks = disciplina.turmas.reduce(
-    (acc, turma) =>
-      acc + turma.links.filter((link) => link.is_active !== false).length,
-    0,
+  const totalLinks = useMemo(
+    () =>
+      disciplina.turmas.reduce(
+        (acc, turma) =>
+          acc +
+          turma.links.filter((link) => {
+            const override = linkOverrides[link.id];
+            return override?.isActive ?? link.is_active;
+          }).length,
+        0,
+      ),
+    [disciplina.turmas, linkOverrides],
   );
 
   function closeInlineForms() {
@@ -43,41 +63,43 @@ export function DisciplinaCard({ disciplina }: DisciplinaCardProps) {
     setReportingLinkId(null);
   }
 
+  function handleReportSuccess(linkId: string, result: ReportLinkSuccess) {
+    setLinkOverrides((current) => ({
+      ...current,
+      [linkId]: {
+        reports: result.reportsCount,
+        isActive: result.isActive,
+      },
+    }));
+    setReportingLinkId(null);
+  }
+
   return (
     <>
-      <article className="flex h-full flex-col justify-between rounded-3xl border bg-card p-5 shadow-sm transition-colors hover:border-primary/30 hover:bg-muted/20">
-        <div className="space-y-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold tracking-wide text-emerald-700 dark:border-primary/20 dark:bg-primary/10 dark:text-primary">
-              {disciplina.codigo}
+      <article className="rounded-2xl border bg-card p-5 shadow-sm hover:border-primary/30 hover:bg-muted/20">
+        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold tracking-wide text-emerald-700 dark:border-primary/20 dark:bg-primary/10 dark:text-primary">
+            {disciplina.codigo}
+          </span>
+          {disciplina.departamento && (
+            <span className="min-w-0 max-w-full whitespace-normal break-words rounded-2xl border px-3 py-1 text-wrap text-xs leading-normal text-muted-foreground [overflow-wrap:anywhere]">
+              {disciplina.departamento}
             </span>
-
-            {disciplina.departamento && (
-              <span className="min-w-0 max-w-full whitespace-normal break-words rounded-2xl border px-3 py-1 text-wrap text-xs leading-normal text-muted-foreground [overflow-wrap:anywhere]">
-                {disciplina.departamento}
-              </span>
-            )}
-          </div>
-
-          <div className="space-y-2">
-            <h3 className="line-clamp-2 text-lg font-semibold leading-tight">
-              {disciplina.nome}
-            </h3>
-
-            <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-              <span className="inline-flex items-center gap-1">
-                <Users className="size-4" />
-                {totalTurmas} {totalTurmas === 1 ? "turma" : "turmas"}
-              </span>
-
-              <span className="inline-flex items-center gap-1">
-                <MessageCircle className="size-4" />
-                {totalLinks} {totalLinks === 1 ? "grupo" : "grupos"}
-              </span>
-            </div>
-          </div>
+          )}
         </div>
-
+        <h3 className="mt-3 text-lg font-semibold leading-tight">
+          {disciplina.nome}
+        </h3>
+        <div className="mt-4 flex flex-wrap gap-4 text-sm text-muted-foreground">
+          <span className="inline-flex items-center gap-1.5">
+            <Users className="size-4" aria-hidden="true" />
+            {totalTurmas} {totalTurmas === 1 ? "turma" : "turmas"}
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <MessageCircle className="size-4" aria-hidden="true" />
+            {totalLinks} {totalLinks === 1 ? "grupo" : "grupos"}
+          </span>
+        </div>
         <Button
           type="button"
           className="mt-5 w-full"
@@ -91,111 +113,124 @@ export function DisciplinaCard({ disciplina }: DisciplinaCardProps) {
       </article>
 
       <Dialog
+        modal
         open={open}
         onOpenChange={(nextOpen) => {
           setOpen(nextOpen);
-
-          if (!nextOpen) {
-            closeInlineForms();
-          }
+          if (!nextOpen) closeInlineForms();
         }}
       >
-        <DialogContent className="max-w-3xl">
+        <DialogContent className="max-h-[90dvh] max-w-3xl overflow-y-auto overscroll-contain touch-pan-y">
           <DialogHeader>
-            <DialogTitle className="text-wrap break-words leading-snug [overflow-wrap:anywhere]">
+            <DialogTitle>
               {disciplina.codigo} · {disciplina.nome}
             </DialogTitle>
-
             <DialogDescription>
               Veja as turmas disponíveis e acesse ou contribua com os links dos
               grupos.
             </DialogDescription>
-
-            {disciplina.departamento && (
-              <p className="max-w-full whitespace-normal break-words text-wrap text-sm leading-normal text-muted-foreground [overflow-wrap:anywhere]">
-                {disciplina.departamento}
-              </p>
-            )}
           </DialogHeader>
 
-          <div className="rounded-2xl bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+          {disciplina.departamento && (
+            <p className="text-xs font-medium text-primary">
+              {disciplina.departamento}
+            </p>
+          )}
+
+          <p className="rounded-xl bg-muted/50 p-3 text-sm text-muted-foreground">
             Não existe grupo? Crie um no seu WhatsApp e cole o link de convite
             aqui.
-          </div>
+          </p>
 
-          <div className="max-h-[65vh] space-y-3 overflow-y-auto pr-1">
+          <div className="space-y-3">
             {disciplina.turmas.map((turma) => {
-              const activeLinks = turma.links.filter(
-                (link) => link.is_active !== false,
-              );
+              const activeLinks = turma.links.filter((candidate) => {
+                const override = linkOverrides[candidate.id];
+                return override?.isActive ?? candidate.is_active;
+              });
               const link = activeLinks[0];
+              const reportsCount = link
+                ? Math.min(
+                    Math.max(
+                      0,
+                      linkOverrides[link.id]?.reports ?? link.reports ?? 0,
+                    ),
+                    REPORTS_DEACTIVATION_THRESHOLD,
+                  )
+                : 0;
               const isEditingThisTurma = editingTurmaId === turma.id;
               const isReportingThisLink = reportingLinkId === link?.id;
 
               return (
-                <div
-                  key={turma.id}
-                  className="rounded-2xl border bg-background p-4"
-                >
-                  <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                    <div className="min-w-0 space-y-1">
-                      <p className="text-base font-semibold">
-                        Turma {turma.codigo_turma}
-                      </p>
-
-                      <p className="truncate text-sm text-muted-foreground">
+                <section key={turma.id} className="rounded-xl border p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <p className="font-medium">Turma {turma.codigo_turma}</p>
+                      <p className="mt-1 text-sm text-muted-foreground">
                         {turma.professor ?? "Docente não informado"}
                       </p>
+                      {link && (
+                        <p
+                          className="mt-2 inline-flex items-center gap-1.5 text-xs text-muted-foreground"
+                          aria-label={`Este link possui ${reportsCount} de ${REPORTS_DEACTIVATION_THRESHOLD} denúncias`}
+                        >
+                          <Flag className="size-3.5" aria-hidden="true" />
+                          {reportsCount} de {REPORTS_DEACTIVATION_THRESHOLD}{" "}
+                          denúncias
+                        </p>
+                      )}
                     </div>
 
-                    {link ? (
-                      <div className="flex flex-wrap items-center gap-2">
-                        <a
-                          href={link.url_whatsapp}
-                          target="_blank"
-                          rel="noreferrer noopener"
-                          className={cn(
-                            buttonVariants({ size: "lg" }),
-                            "h-11 min-w-40 bg-emerald-100 px-4 text-sm font-bold text-emerald-900 hover:bg-emerald-200 dark:bg-emerald-950 dark:text-emerald-100 dark:hover:bg-emerald-900",
-                          )}
-                        >
-                          Entrar no Grupo
-                          <ExternalLink className="size-4" />
-                        </a>
-
+                    <div className="flex flex-wrap gap-2">
+                      {link ? (
+                        <>
+                          <a
+                            href={link.url_whatsapp}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className={cn(buttonVariants({ size: "sm" }))}
+                          >
+                            <ExternalLink
+                              className="size-4"
+                              aria-hidden="true"
+                            />
+                            Entrar no Grupo
+                          </a>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              setEditingTurmaId(null);
+                              setReportingLinkId(
+                                isReportingThisLink ? null : link.id,
+                              );
+                            }}
+                          >
+                            <Flag className="size-4" aria-hidden="true" />
+                            Denunciar
+                          </Button>
+                        </>
+                      ) : (
                         <Button
                           type="button"
-                          size="icon"
-                          variant="ghost"
-                          title="Denunciar link"
-                          aria-label={`Denunciar link da turma ${turma.codigo_turma}`}
-                          className="size-9 text-muted-foreground hover:text-destructive"
+                          size="sm"
+                          variant="outline"
                           onClick={() => {
-                            setEditingTurmaId(null);
-                            setReportingLinkId(
-                              isReportingThisLink ? null : link.id,
+                            setReportingLinkId(null);
+                            setEditingTurmaId(
+                              isEditingThisTurma ? null : turma.id,
                             );
                           }}
                         >
-                          <Flag className="size-4" />
+                          <MessageCirclePlus
+                            className="size-4"
+                            aria-hidden="true"
+                          />
+                          Adicionar Link
                         </Button>
-                      </div>
-                    ) : (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          setReportingLinkId(null);
-                          setEditingTurmaId(
-                            isEditingThisTurma ? null : turma.id,
-                          );
-                        }}
-                      >
-                        <MessageCirclePlus className="size-4" />
-                        Adicionar Link
-                      </Button>
-                    )}
+                      )}
+                    </div>
                   </div>
 
                   {!link && isEditingThisTurma && (
@@ -211,20 +246,24 @@ export function DisciplinaCard({ disciplina }: DisciplinaCardProps) {
                     <ReportInlineForm
                       linkId={link.id}
                       codigoTurma={turma.codigo_turma}
+                      initialReportsCount={reportsCount}
                       onCancel={() => setReportingLinkId(null)}
-                      onSuccess={() => setReportingLinkId(null)}
+                      onSuccess={(result) =>
+                        handleReportSuccess(link.id, result)
+                      }
                     />
                   )}
-                </div>
+                </section>
               );
             })}
-          </div>
 
-          {totalTurmas === 0 && (
-            <div className="rounded-2xl border border-dashed p-8 text-center text-sm text-muted-foreground">
-              Nenhuma turma disponível para esta disciplina no semestre vigente.
-            </div>
-          )}
+            {totalTurmas === 0 && (
+              <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
+                Nenhuma turma disponível para esta disciplina no semestre
+                vigente.
+              </p>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </>
