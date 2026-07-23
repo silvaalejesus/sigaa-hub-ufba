@@ -9,6 +9,9 @@ Versão multiunidade:
 - Extrai disciplinas e turmas por unidade.
 - Agrega tudo em um único dados_sigaa.json.
 - Continua a execução mesmo se uma unidade falhar.
+- Reconhece códigos de componentes com sufixos, como ENFA84.0 e ENFA84.1.
+- Localiza preferencialmente a tabela de resultados das turmas.
+- Registra quantidades de linhas brutas e linhas descartadas para diagnóstico.
 
 Uso básico:
     python scraper.py --ano 2026 --periodo 2
@@ -35,10 +38,12 @@ from typing import Any, Dict, List, Optional, Tuple
 from playwright.sync_api import (
     Browser,
     BrowserContext,
+    Locator,
     Page,
     TimeoutError as PlaywrightTimeoutError,
     sync_playwright,
 )
+
 from run_tracking import (
     capture_unexpected_exception,
     fail_scraper_run,
@@ -47,7 +52,11 @@ from run_tracking import (
     start_scraper_run,
 )
 
-SIGAA_TURMAS_URL = "https://sigaa.ufba.br/sigaa/public/turmas/listar.jsf?aba=p-ensino"
+
+SIGAA_TURMAS_URL = (
+    "https://sigaa.ufba.br/sigaa/public/turmas/listar.jsf?aba=p-ensino"
+)
+
 DEFAULT_NIVEL = "GRADUAÇÃO"
 
 UNIDADE_KEYWORDS = (
@@ -56,6 +65,8 @@ UNIDADE_KEYWORDS = (
     "FACULDADE",
     "ESCOLA",
     "COLEGIADO",
+    "COORDENAÇÃO",
+    "COORDENACAO",
     "SUPERINTENDÊNCIA",
     "CENTRO",
     "NÚCLEO",
@@ -75,8 +86,16 @@ IGNORED_OPTION_TEXTS = {
     "TODAS AS UNIDADES",
 }
 
+# Formatos aceitos, entre outros:
+#   MATC90 - Nome
+#   ENFA84.0 - Nome
+#   ENFA84.1 - Nome
+#   ABC123A - Nome
+#
+# O grupo (?:\.\d+)? é a correção principal para componentes com ".0", ".1" etc.
 DISCIPLINA_RE = re.compile(
-    r"\b([A-Z]{2,8}\d{2,4}[A-Z]?)\s*(?:-|–|—)\s*(.+)",
+    r"\b([A-Z]{2,10}\d{2,4}(?:\.\d+)?[A-Z]?)"
+    r"\s*(?:-|–|—)\s*(.+)",
     re.IGNORECASE,
 )
 
@@ -103,7 +122,9 @@ def clean_text(value: Any) -> str:
 def normalize_key(value: Any) -> str:
     value = clean_text(value).lower()
     value = unicodedata.normalize("NFD", value)
-    value = "".join(ch for ch in value if unicodedata.category(ch) != "Mn")
+    value = "".join(
+        ch for ch in value if unicodedata.category(ch) != "Mn"
+    )
     return value
 
 
@@ -115,7 +136,9 @@ def is_irrelevant_option(text: str, value: str = "") -> bool:
         return True
 
     text_key = normalize_key(text_clean)
-    ignored_keys = {normalize_key(item) for item in IGNORED_OPTION_TEXTS}
+    ignored_keys = {
+        normalize_key(item) for item in IGNORED_OPTION_TEXTS
+    }
 
     if text_key in ignored_keys:
         return True
@@ -134,20 +157,55 @@ def parse_args() -> argparse.Namespace:
         description="Extrai turmas públicas do SIGAA UFBA usando Playwright."
     )
 
-    parser.add_argument("--ano", default="2026", help="Ano do semestre. Exemplo: 2026")
+    parser.add_argument(
+        "--ano",
+        default="2026",
+        help="Ano do semestre. Exemplo: 2026",
+    )
     parser.add_argument(
         "--periodo",
         default="2",
         choices=["1", "2", "3", "4"],
-        help="Período acadêmico. Exemplo: 1 para 2026.2",
+        help="Período acadêmico. Exemplo: 2 para 2026.2",
     )
-    parser.add_argument("--nivel", default=DEFAULT_NIVEL, help="Nível de ensino. Exemplo: GRADUAÇÃO")
-    parser.add_argument("--output", default="dados_sigaa.json", help="Arquivo JSON de saída.")
-    parser.add_argument("--headful", action="store_true", help="Executa o navegador com interface visual.")
-    parser.add_argument("--debug-html", action="store_true", help="Salva HTMLs de debug em ./debug_sigaa/.")
-    parser.add_argument("--timeout", type=int, default=45_000, help="Timeout em milissegundos.")
-    parser.add_argument("--slow-mo", type=int, default=0, help="Atraso em ms entre ações do Playwright.")
-    parser.add_argument("--max-unidades", type=int, default=None, help="Limita unidades processadas para teste.")
+    parser.add_argument(
+        "--nivel",
+        default=DEFAULT_NIVEL,
+        help="Nível de ensino. Exemplo: GRADUAÇÃO",
+    )
+    parser.add_argument(
+        "--output",
+        default="dados_sigaa.json",
+        help="Arquivo JSON de saída.",
+    )
+    parser.add_argument(
+        "--headful",
+        action="store_true",
+        help="Executa o navegador com interface visual.",
+    )
+    parser.add_argument(
+        "--debug-html",
+        action="store_true",
+        help="Salva HTMLs de debug em ./debug_sigaa/.",
+    )
+    parser.add_argument(
+        "--timeout",
+        type=int,
+        default=45_000,
+        help="Timeout em milissegundos.",
+    )
+    parser.add_argument(
+        "--slow-mo",
+        type=int,
+        default=0,
+        help="Atraso em ms entre ações do Playwright.",
+    )
+    parser.add_argument(
+        "--max-unidades",
+        type=int,
+        default=None,
+        help="Limita unidades processadas para teste.",
+    )
 
     return parser.parse_args()
 
@@ -159,12 +217,19 @@ def safe_wait_networkidle(page: Page, timeout: int = 10_000) -> None:
         pass
 
 
-def get_select_options(page: Page, select_index: int) -> List[Dict[str, str]]:
-    return page.locator("select").nth(select_index).locator("option").evaluate_all(
+def get_select_options(
+    page: Page,
+    select_index: int,
+) -> List[Dict[str, str]]:
+    return page.locator("select").nth(select_index).locator(
+        "option"
+    ).evaluate_all(
         """
         options => options.map(option => ({
-            text: (option.textContent || '').replace(/\\s+/g, ' ').trim(),
-            value: option.value || ''
+          text: (option.textContent || '')
+            .replace(/\\s+/g, ' ')
+            .trim(),
+          value: option.value || ''
         }))
         """
     )
@@ -177,10 +242,11 @@ def select_option_by_text(
     exact: bool = False,
     timeout: int = 45_000,
 ) -> str:
-    """Seleciona uma opção em qualquer <select> pelo texto visível."""
+    """Seleciona uma opção em qualquer select pelo texto visível."""
     target_norm = normalize_key(target_text)
 
     page.wait_for_selector("select", timeout=timeout)
+
     selects = page.locator("select")
     total_selects = selects.count()
 
@@ -200,25 +266,44 @@ def select_option_by_text(
                 if exact:
                     matched = option_norm == target_norm
                 else:
-                    matched = target_norm in option_norm or option_norm in target_norm
+                    matched = (
+                        target_norm in option_norm
+                        or option_norm in target_norm
+                    )
 
                 if matched:
                     select.select_option(value=option["value"])
                     safe_wait_networkidle(page)
+
                     logging.info("Selecionado: %s", option_text)
                     return option_text
-
         except Exception as exc:
-            logging.warning("Falha ao avaliar select #%s: %s", select_index, exc)
+            logging.warning(
+                "Falha ao avaliar select #%s: %s",
+                select_index,
+                exc,
+            )
 
-    raise RuntimeError(f"Não encontrei opção compatível com: {target_text!r}")
+    raise RuntimeError(
+        f"Não encontrei opção compatível com: {target_text!r}"
+    )
 
 
-def fill_first_visible_text_input(page: Page, value: str, *, timeout: int = 45_000) -> None:
+def fill_first_visible_text_input(
+    page: Page,
+    value: str,
+    *,
+    timeout: int = 45_000,
+) -> None:
     """Preenche o primeiro input textual visível, geralmente o campo de ano."""
-    selector = "input[type='text'], input:not([type]), input[type='search']"
+    selector = (
+        "input[type='text'], "
+        "input:not([type]), "
+        "input[type='search']"
+    )
 
     page.wait_for_selector(selector, timeout=timeout)
+
     inputs = page.locator(selector)
     total_inputs = inputs.count()
 
@@ -231,17 +316,26 @@ def fill_first_visible_text_input(page: Page, value: str, *, timeout: int = 45_0
                 logging.info("Ano preenchido: %s", value)
                 return
         except Exception as exc:
-            logging.warning("Falha ao preencher input #%s: %s", index, exc)
+            logging.warning(
+                "Falha ao preencher input #%s: %s",
+                index,
+                exc,
+            )
 
-    raise RuntimeError("Não encontrei input textual visível para preencher o ano.")
+    raise RuntimeError(
+        "Não encontrei input textual visível para preencher o ano."
+    )
 
 
 def score_unidade_select(options: List[Dict[str, str]]) -> int:
-    """Pontua um <select> para descobrir qual representa Unidades/Departamentos."""
+    """Pontua um select para descobrir qual representa unidades."""
     valid_options = [
         option
         for option in options
-        if not is_irrelevant_option(option.get("text", ""), option.get("value", ""))
+        if not is_irrelevant_option(
+            option.get("text", ""),
+            option.get("value", ""),
+        )
     ]
 
     if len(valid_options) < 3:
@@ -261,9 +355,14 @@ def score_unidade_select(options: List[Dict[str, str]]) -> int:
     return score
 
 
-def find_unidade_select(page: Page, *, timeout: int = 45_000) -> Tuple[int, List[Dict[str, str]]]:
+def find_unidade_select(
+    page: Page,
+    *,
+    timeout: int = 45_000,
+) -> Tuple[int, List[Dict[str, str]]]:
     """Localiza o select de Unidades/Departamentos."""
     page.wait_for_selector("select", timeout=timeout)
+
     selects = page.locator("select")
     total_selects = selects.count()
 
@@ -285,9 +384,12 @@ def find_unidade_select(page: Page, *, timeout: int = 45_000) -> Tuple[int, List
                 best_index = select_index
                 best_score = score
                 best_options = options
-
         except Exception as exc:
-            logging.warning("Não foi possível avaliar select #%s como unidade: %s", select_index, exc)
+            logging.warning(
+                "Não foi possível avaliar select #%s como unidade: %s",
+                select_index,
+                exc,
+            )
 
     valid_options = [
         {
@@ -295,14 +397,21 @@ def find_unidade_select(page: Page, *, timeout: int = 45_000) -> Tuple[int, List
             "value": clean_text(option.get("value", "")),
         }
         for option in best_options
-        if not is_irrelevant_option(option.get("text", ""), option.get("value", ""))
+        if not is_irrelevant_option(
+            option.get("text", ""),
+            option.get("value", ""),
+        )
     ]
 
     if best_index < 0 or not valid_options:
-        raise RuntimeError("Não foi possível localizar o select de Unidades/Departamentos.")
+        raise RuntimeError(
+            "Não foi possível localizar o select de "
+            "Unidades/Departamentos."
+        )
 
     logging.info(
-        "Select de unidades encontrado no índice %s com %s opção(ões) válidas.",
+        "Select de unidades encontrado no índice %s "
+        "com %s opção(ões) válidas.",
         best_index,
         len(valid_options),
     )
@@ -310,94 +419,301 @@ def find_unidade_select(page: Page, *, timeout: int = 45_000) -> Tuple[int, List
     return best_index, valid_options
 
 
-def select_unidade(page: Page, unidade: Dict[str, str], *, timeout: int = 45_000) -> str:
-    """Seleciona uma unidade; recalcula o select porque o JSF pode recriar o DOM."""
-    select_index, current_options = find_unidade_select(page, timeout=timeout)
+def select_unidade(
+    page: Page,
+    unidade: Dict[str, str],
+    *,
+    timeout: int = 45_000,
+) -> str:
+    """
+    Seleciona uma unidade pelo value.
+
+    O select é recalculado porque páginas JSF podem recriar o DOM.
+    """
+    select_index, current_options = find_unidade_select(
+        page,
+        timeout=timeout,
+    )
 
     target_text = normalize_key(unidade["text"])
     target_value = clean_text(unidade["value"])
-
     select = page.locator("select").nth(select_index)
 
     if target_value:
         for option in current_options:
-            if clean_text(option["value"]) == target_value:
-                select.select_option(value=target_value)
-                safe_wait_networkidle(page)
-                return option["text"]
+            if clean_text(option["value"]) != target_value:
+                continue
+
+            select.select_option(value=target_value)
+            safe_wait_networkidle(page)
+
+            selected_value = clean_text(select.input_value())
+
+            if selected_value != target_value:
+                raise RuntimeError(
+                    "A unidade não foi selecionada corretamente: "
+                    f"esperado={target_value!r}, "
+                    f"obtido={selected_value!r}"
+                )
+
+            return clean_text(option["text"])
 
     for option in current_options:
-        if normalize_key(option["text"]) == target_text:
-            select.select_option(value=option["value"])
-            safe_wait_networkidle(page)
-            return option["text"]
+        if normalize_key(option["text"]) != target_text:
+            continue
 
-    raise RuntimeError(f"Unidade não encontrada no formulário atual: {unidade['text']}")
+        select.select_option(value=option["value"])
+        safe_wait_networkidle(page)
+        return clean_text(option["text"])
+
+    raise RuntimeError(
+        "Unidade não encontrada no formulário atual: "
+        f"{unidade['text']}"
+    )
 
 
-def click_buscar(page: Page, *, timeout: int = 45_000) -> None:
+def get_results_signature(page: Page) -> str:
+    """Obtém uma assinatura simples das tabelas atualmente renderizadas."""
+    try:
+        return clean_text(
+            page.locator("table").evaluate_all(
+                """
+                tables => tables
+                  .map(table => (table.innerText || '')
+                    .replace(/\\s+/g, ' ')
+                    .trim())
+                  .filter(Boolean)
+                  .join(' || ')
+                """
+            )
+        )
+    except Exception:
+        return ""
+
+
+def click_buscar(
+    page: Page,
+    *,
+    timeout: int = 45_000,
+) -> None:
     """Clica no botão Buscar e aguarda navegação ou atualização JSF."""
-    button = page.get_by_role("button", name=re.compile(r"buscar", re.IGNORECASE)).first
+    button = page.get_by_role(
+        "button",
+        name=re.compile(r"buscar", re.IGNORECASE),
+    ).first
+
+    button.wait_for(state="visible", timeout=timeout)
+
+    previous_signature = get_results_signature(page)
 
     try:
-        button.wait_for(state="visible", timeout=timeout)
-
         try:
-            with page.expect_navigation(wait_until="networkidle", timeout=timeout):
+            with page.expect_navigation(
+                wait_until="domcontentloaded",
+                timeout=timeout,
+            ):
                 button.click()
         except PlaywrightTimeoutError:
-            logging.info("Sem navegação completa após Buscar; aguardando atualização do DOM.")
-            safe_wait_networkidle(page)
+            logging.info(
+                "Sem navegação completa após Buscar; "
+                "aguardando atualização do DOM."
+            )
 
+        safe_wait_networkidle(page)
+
+        if previous_signature:
+            try:
+                page.wait_for_function(
+                    """
+                    previousSignature => {
+                      const currentSignature = Array
+                        .from(document.querySelectorAll('table'))
+                        .map(table => (table.innerText || '')
+                          .replace(/\\s+/g, ' ')
+                          .trim())
+                        .filter(Boolean)
+                        .join(' || ');
+
+                      return (
+                        currentSignature.length > 0
+                        && currentSignature !== previousSignature
+                      );
+                    }
+                    """,
+                    arg=previous_signature,
+                    timeout=min(timeout, 15_000),
+                )
+            except PlaywrightTimeoutError:
+                logging.info(
+                    "A assinatura das tabelas não mudou; "
+                    "a página pode ter realizado navegação completa "
+                    "ou retornado estrutura semelhante."
+                )
     except Exception as exc:
-        raise RuntimeError(f"Não foi possível clicar em Buscar: {exc}") from exc
+        raise RuntimeError(
+            f"Não foi possível clicar em Buscar: {exc}"
+        ) from exc
 
 
-def wait_for_results(page: Page, *, timeout: int = 45_000) -> None:
+def wait_for_results(
+    page: Page,
+    *,
+    timeout: int = 45_000,
+) -> None:
     """Aguarda indício de resultado, tabela vazia ou mensagem do SIGAA."""
     try:
         page.wait_for_function(
             """
             () => {
-                const text = document.body.innerText || '';
-                const rows = document.querySelectorAll('table tr').length;
-                const hasKnownTerms =
-                    text.includes('Turma') ||
-                    text.includes('Docente') ||
-                    text.includes('Horário') ||
-                    text.includes('Horario') ||
-                    text.includes('Nenhum') ||
-                    text.includes('nenhum') ||
-                    text.includes('Componente Curricular');
-                return rows > 3 && hasKnownTerms;
+              const text = document.body.innerText || '';
+              const rows = document.querySelectorAll('table tr').length;
+
+              const hasKnownTerms =
+                text.includes('Turma')
+                || text.includes('Docente')
+                || text.includes('Horário')
+                || text.includes('Horario')
+                || text.includes('Nenhum')
+                || text.includes('nenhum')
+                || text.includes('Componente Curricular');
+
+              return rows > 3 && hasKnownTerms;
             }
             """,
             timeout=timeout,
         )
     except PlaywrightTimeoutError:
-        logging.warning("Timeout aguardando resultados; tentando extrair mesmo assim.")
+        logging.warning(
+            "Timeout aguardando resultados; "
+            "tentando extrair mesmo assim."
+        )
 
 
-def extract_table_rows(page: Page) -> List[Dict[str, Any]]:
-    """Extrai todas as linhas de tabelas HTML da página final."""
-    return page.locator("table tr").evaluate_all(
+def locate_results_table(page: Page) -> Optional[Locator]:
+    """
+    Localiza a tabela que contém as disciplinas e turmas.
+
+    A identificação considera cabeçalhos típicos da consulta pública do
+    SIGAA. Se nenhuma tabela tiver pontuação suficiente, o scraper usa
+    todas as linhas da página como fallback.
+    """
+    tables = page.locator("table")
+    total_tables = tables.count()
+
+    best_table: Optional[Locator] = None
+    best_score = 0
+
+    for index in range(total_tables):
+        table = tables.nth(index)
+
+        try:
+            text = normalize_key(table.inner_text())
+            row_count = table.locator("tr").count()
+
+            if not text or row_count < 2:
+                continue
+
+            score = min(row_count, 100)
+
+            for keyword, weight in (
+                ("codigo", 15),
+                ("ano-periodo", 15),
+                ("turma", 15),
+                ("docente", 10),
+                ("horario", 10),
+                ("componente curricular", 20),
+                ("vagas", 5),
+            ):
+                if keyword in text:
+                    score += weight
+
+            # Tabelas de formulário costumam ter pouquíssimas linhas.
+            if row_count <= 5:
+                score -= 30
+
+            if score > best_score:
+                best_score = score
+                best_table = table
+        except Exception as exc:
+            logging.debug(
+                "Não foi possível avaliar tabela #%s: %s",
+                index,
+                exc,
+            )
+
+    if best_table is not None:
+        logging.info(
+            "Tabela de resultados localizada com pontuação %s "
+            "e %s linha(s) no DOM.",
+            best_score,
+            best_table.locator("tr").count(),
+        )
+
+    return best_table
+
+
+def extract_rows_from_locator(locator: Locator) -> List[Dict[str, Any]]:
+    return locator.evaluate_all(
         """
-        rows => rows.map(row => ({
-            text: (row.innerText || '').replace(/\\s+/g, ' ').trim(),
+        rows => rows
+          .map(row => ({
+            text: (row.innerText || '')
+              .replace(/\\s+/g, ' ')
+              .trim(),
             className: row.className || '',
-            cells: Array.from(row.querySelectorAll('th, td')).map(cell => ({
-                text: (cell.innerText || '').replace(/\\s+/g, ' ').trim(),
+            cells: Array
+              .from(row.querySelectorAll('th, td'))
+              .map(cell => ({
+                text: (cell.innerText || '')
+                  .replace(/\\s+/g, ' ')
+                  .trim(),
                 tag: cell.tagName.toLowerCase(),
                 colspan: cell.getAttribute('colspan') || '1',
                 className: cell.className || ''
-            }))
-        })).filter(row => row.text && row.cells.length > 0)
+              }))
+          }))
+          .filter(row => row.text && row.cells.length > 0)
         """
     )
 
 
-def parse_disciplina_from_text(text: str) -> Optional[Tuple[str, str]]:
+def extract_table_rows(page: Page) -> List[Dict[str, Any]]:
+    """
+    Extrai as linhas da tabela de resultados.
+
+    Usa todas as tabelas somente como fallback, para manter compatibilidade
+    caso o SIGAA altere novamente a marcação HTML.
+    """
+    results_table = locate_results_table(page)
+
+    if results_table is not None:
+        rows = extract_rows_from_locator(results_table.locator("tr"))
+        logging.info(
+            "Extraídas %s linha(s) bruta(s) da tabela de resultados.",
+            len(rows),
+        )
+        return rows
+
+    logging.warning(
+        "Tabela de resultados específica não localizada; "
+        "usando todas as linhas de tabela da página."
+    )
+
+    rows = extract_rows_from_locator(page.locator("table tr"))
+
+    logging.info(
+        "Extraídas %s linha(s) bruta(s) usando o fallback.",
+        len(rows),
+    )
+
+    return rows
+
+
+def parse_disciplina_from_text(
+    text: str,
+) -> Optional[Tuple[str, str]]:
     text = clean_text(text)
+
     text = re.sub(
         r"^(componente curricular|disciplina)\s*:?\s*",
         "",
@@ -406,6 +722,7 @@ def parse_disciplina_from_text(text: str) -> Optional[Tuple[str, str]]:
     )
 
     match = DISCIPLINA_RE.search(text)
+
     if not match:
         return None
 
@@ -450,22 +767,34 @@ def detect_header_map(cells: List[str]) -> Dict[str, int]:
         if "docente" in key or "professor" in key:
             header_map["docente"] = index
 
-    has_useful_header = "turma" in header_map and (
-        "docente" in header_map or "horario" in header_map
+    has_useful_header = (
+        "turma" in header_map
+        and (
+            "docente" in header_map
+            or "horario" in header_map
+        )
     )
 
     return header_map if has_useful_header else {}
 
 
-def safe_get(cells: List[str], index: Optional[int]) -> str:
+def safe_get(
+    cells: List[str],
+    index: Optional[int],
+) -> str:
     if index is None:
         return ""
+
     if index < 0 or index >= len(cells):
         return ""
+
     return clean_text(cells[index])
 
 
-def extract_turma_from_cells(cells: List[str], header_map: Dict[str, int]) -> Optional[Dict[str, str]]:
+def extract_turma_from_cells(
+    cells: List[str],
+    header_map: Dict[str, int],
+) -> Optional[Dict[str, str]]:
     if not cells:
         return None
 
@@ -497,7 +826,11 @@ def extract_turma_from_cells(cells: List[str], header_map: Dict[str, int]) -> Op
                 break
 
     if not professor:
-        ignored = {normalize_key(turma), normalize_key(horario)}
+        ignored = {
+            normalize_key(turma),
+            normalize_key(horario),
+        }
+
         candidates: List[str] = []
 
         for index, cell in enumerate(cells):
@@ -516,7 +849,17 @@ def extract_turma_from_cells(cells: List[str], header_map: Dict[str, int]) -> Op
             if looks_like_schedule(cell_clean):
                 continue
 
-            if any(term in cell_key for term in ["turma", "horario", "docente", "vagas"]):
+            if any(
+                term in cell_key
+                for term in (
+                    "turma",
+                    "horario",
+                    "docente",
+                    "vagas",
+                    "codigo",
+                    "ano-periodo",
+                )
+            ):
                 continue
 
             if parse_disciplina_from_text(cell_clean):
@@ -526,7 +869,11 @@ def extract_turma_from_cells(cells: List[str], header_map: Dict[str, int]) -> Op
                 candidates.append(cell_clean)
 
         if candidates:
-            candidates = sorted(candidates, key=len, reverse=True)
+            candidates = sorted(
+                candidates,
+                key=len,
+                reverse=True,
+            )
             professor = candidates[0]
 
     return {
@@ -544,25 +891,37 @@ def parse_sigaa_rows(
 ) -> Dict[str, List[Dict[str, str]]]:
     disciplinas_by_codigo: Dict[str, Dict[str, str]] = {}
     turmas: List[Dict[str, str]] = []
-
     seen_turmas = set()
+
     current_disciplina: Optional[Tuple[str, str]] = None
     header_map: Dict[str, int] = {}
 
-    for row in rows:
+    discarded_rows = 0
+    rows_without_current_disciplina = 0
+    rows_without_turma = 0
+    disciplina_rows = 0
+    turma_rows = 0
+
+    for row_index, row in enumerate(rows, start=1):
         try:
-            cells = [clean_text(cell["text"]) for cell in row.get("cells", [])]
+            cells = [
+                clean_text(cell["text"])
+                for cell in row.get("cells", [])
+            ]
             row_text = clean_text(row.get("text", ""))
 
             if not row_text or not cells:
+                discarded_rows += 1
                 continue
 
             possible_header = detect_header_map(cells)
+
             if possible_header:
                 header_map = possible_header
                 continue
 
             disciplina = parse_disciplina_from_text(row_text)
+
             if disciplina:
                 current_disciplina = disciplina
                 codigo, nome = disciplina
@@ -576,11 +935,20 @@ def parse_sigaa_rows(
                     },
                 )
 
-            if not current_disciplina:
+                disciplina_rows += 1
                 continue
 
-            turma_data = extract_turma_from_cells(cells, header_map)
+            if not current_disciplina:
+                rows_without_current_disciplina += 1
+                continue
+
+            turma_data = extract_turma_from_cells(
+                cells,
+                header_map,
+            )
+
             if not turma_data:
+                rows_without_turma += 1
                 continue
 
             disciplina_codigo, _disciplina_nome = current_disciplina
@@ -603,12 +971,37 @@ def parse_sigaa_rows(
             if unique_key not in seen_turmas:
                 seen_turmas.add(unique_key)
                 turmas.append(turma_record)
+                turma_rows += 1
 
         except Exception as exc:
-            logging.warning("Falha ao processar linha da tabela: %s", exc)
+            logging.warning(
+                "Falha ao processar linha %s da tabela: %s",
+                row_index,
+                exc,
+            )
+
+    logging.info(
+        "Diagnóstico do parser para %s: "
+        "%s linha(s) bruta(s), "
+        "%s linha(s) de disciplina reconhecida(s), "
+        "%s linha(s) de turma reconhecida(s), "
+        "%s sem disciplina corrente, "
+        "%s sem turma reconhecível e "
+        "%s vazia(s)/descartada(s).",
+        departamento,
+        len(rows),
+        disciplina_rows,
+        turma_rows,
+        rows_without_current_disciplina,
+        rows_without_turma,
+        discarded_rows,
+    )
 
     return {
-        "disciplinas": sorted(disciplinas_by_codigo.values(), key=lambda item: item["codigo"]),
+        "disciplinas": sorted(
+            disciplinas_by_codigo.values(),
+            key=lambda item: item["codigo"],
+        ),
         "turmas": sorted(
             turmas,
             key=lambda item: (
@@ -620,9 +1013,17 @@ def parse_sigaa_rows(
     }
 
 
-def merge_results(aggregate: Dict[str, Any], partial: Dict[str, List[Dict[str, str]]]) -> None:
-    disciplinas_by_codigo: Dict[str, Dict[str, str]] = aggregate["_disciplinas_by_codigo"]
-    turmas_by_key: Dict[Tuple[str, str, str], Dict[str, str]] = aggregate["_turmas_by_key"]
+def merge_results(
+    aggregate: Dict[str, Any],
+    partial: Dict[str, List[Dict[str, str]]],
+) -> None:
+    disciplinas_by_codigo: Dict[str, Dict[str, str]] = (
+        aggregate["_disciplinas_by_codigo"]
+    )
+    turmas_by_key: Dict[
+        Tuple[str, str, str],
+        Dict[str, str],
+    ] = aggregate["_turmas_by_key"]
 
     for disciplina in partial["disciplinas"]:
         codigo = disciplina["codigo"]
@@ -631,7 +1032,11 @@ def merge_results(aggregate: Dict[str, Any], partial: Dict[str, List[Dict[str, s
             disciplinas_by_codigo[codigo] = disciplina
         else:
             existing = disciplinas_by_codigo[codigo]
-            if not existing.get("departamento") and disciplina.get("departamento"):
+
+            if (
+                not existing.get("departamento")
+                and disciplina.get("departamento")
+            ):
                 existing["departamento"] = disciplina["departamento"]
 
     for turma in partial["turmas"]:
@@ -645,34 +1050,76 @@ def merge_results(aggregate: Dict[str, Any], partial: Dict[str, List[Dict[str, s
             turmas_by_key[key] = turma
         else:
             existing = turmas_by_key[key]
-            for field in ("professor", "horario", "departamento"):
+
+            for field in (
+                "professor",
+                "horario",
+                "departamento",
+            ):
                 if not existing.get(field) and turma.get(field):
                     existing[field] = turma[field]
 
 
-def prepare_form(page: Page, args: argparse.Namespace) -> None:
-    """Abre o formulário limpo e aplica filtros fixos: nível, ano e período."""
-    page.goto(SIGAA_TURMAS_URL, wait_until="domcontentloaded", timeout=args.timeout)
+def prepare_form(
+    page: Page,
+    args: argparse.Namespace,
+) -> None:
+    """Abre o formulário e aplica os filtros fixos."""
+    page.goto(
+        SIGAA_TURMAS_URL,
+        wait_until="domcontentloaded",
+        timeout=args.timeout,
+    )
+
     safe_wait_networkidle(page)
 
-    select_option_by_text(page, args.nivel, exact=True, timeout=args.timeout)
+    select_option_by_text(
+        page,
+        args.nivel,
+        exact=True,
+        timeout=args.timeout,
+    )
+
     safe_wait_networkidle(page)
 
-    fill_first_visible_text_input(page, args.ano, timeout=args.timeout)
-    select_option_by_text(page, args.periodo, exact=True, timeout=args.timeout)
+    fill_first_visible_text_input(
+        page,
+        args.ano,
+        timeout=args.timeout,
+    )
+
+    select_option_by_text(
+        page,
+        args.periodo,
+        exact=True,
+        timeout=args.timeout,
+    )
 
 
-def discover_unidades(page: Page, args: argparse.Namespace) -> List[Dict[str, str]]:
-    logging.info("Descobrindo unidades disponíveis para o nível: %s", args.nivel)
+def discover_unidades(
+    page: Page,
+    args: argparse.Namespace,
+) -> List[Dict[str, str]]:
+    logging.info(
+        "Descobrindo unidades disponíveis para o nível: %s",
+        args.nivel,
+    )
 
     prepare_form(page, args)
-    _select_index, unidades = find_unidade_select(page, timeout=args.timeout)
+
+    _select_index, unidades = find_unidade_select(
+        page,
+        timeout=args.timeout,
+    )
 
     seen = set()
     unique_unidades: List[Dict[str, str]] = []
 
     for unidade in unidades:
-        key = (normalize_key(unidade["text"]), clean_text(unidade["value"]))
+        key = (
+            normalize_key(unidade["text"]),
+            clean_text(unidade["value"]),
+        )
 
         if key in seen:
             continue
@@ -683,9 +1130,39 @@ def discover_unidades(page: Page, args: argparse.Namespace) -> List[Dict[str, st
     if args.max_unidades is not None:
         unique_unidades = unique_unidades[: args.max_unidades]
 
-    logging.info("Total de unidades válidas encontradas: %s", len(unique_unidades))
+    logging.info(
+        "Total de unidades válidas encontradas: %s",
+        len(unique_unidades),
+    )
 
     return unique_unidades
+
+
+def save_debug_html(
+    page: Page,
+    unidade: Dict[str, str],
+    *,
+    index: int,
+) -> None:
+    debug_dir = Path("debug_sigaa")
+    debug_dir.mkdir(exist_ok=True)
+
+    safe_name = re.sub(
+        r"[^A-Za-z0-9_-]+",
+        "_",
+        unidade["text"],
+    )[:80]
+
+    html_path = debug_dir / f"{index:03d}_{safe_name}.html"
+    html_path.write_text(
+        page.content(),
+        encoding="utf-8",
+    )
+
+    logging.info(
+        "HTML de diagnóstico salvo em: %s",
+        html_path,
+    )
 
 
 def scrape_unidade(
@@ -698,35 +1175,68 @@ def scrape_unidade(
 ) -> Dict[str, List[Dict[str, str]]]:
     semestre = f"{args.ano}.{args.periodo}"
 
-    logging.info("A extrair unidade %s de %s: %s", index, total, unidade["text"])
+    logging.info(
+        "A extrair unidade %s de %s: %s",
+        index,
+        total,
+        unidade["text"],
+    )
 
     prepare_form(page, args)
-    unidade_selecionada = select_unidade(page, unidade, timeout=args.timeout)
 
-    logging.info("Unidade selecionada: %s", unidade_selecionada)
+    unidade_selecionada = select_unidade(
+        page,
+        unidade,
+        timeout=args.timeout,
+    )
 
-    click_buscar(page, timeout=args.timeout)
-    wait_for_results(page, timeout=args.timeout)
+    logging.info(
+        "Unidade selecionada: %s",
+        unidade_selecionada,
+    )
+
+    click_buscar(
+        page,
+        timeout=args.timeout,
+    )
+
+    wait_for_results(
+        page,
+        timeout=args.timeout,
+    )
 
     if args.debug_html:
-        debug_dir = Path("debug_sigaa")
-        debug_dir.mkdir(exist_ok=True)
-
-        safe_name = re.sub(r"[^A-Za-z0-9_-]+", "_", unidade["text"])[:80]
-        html_path = debug_dir / f"{index:03d}_{safe_name}.html"
-        html_path.write_text(page.content(), encoding="utf-8")
+        save_debug_html(
+            page,
+            unidade,
+            index=index,
+        )
 
     rows = extract_table_rows(page)
 
-    partial = parse_sigaa_rows(rows, semestre=semestre, departamento=unidade_selecionada)
+    partial = parse_sigaa_rows(
+        rows,
+        semestre=semestre,
+        departamento=unidade_selecionada,
+    )
 
     logging.info(
-        "Unidade %s de %s concluída: %s disciplina(s), %s turma(s).",
+        "Unidade %s de %s concluída: "
+        "%s disciplina(s), %s turma(s).",
         index,
         total,
         len(partial["disciplinas"]),
         len(partial["turmas"]),
     )
+
+    if rows and not partial["disciplinas"]:
+        logging.warning(
+            "A unidade %s possuía %s linha(s), "
+            "mas nenhuma disciplina foi reconhecida. "
+            "Consulte o HTML de diagnóstico.",
+            unidade_selecionada,
+            len(rows),
+        )
 
     return partial
 
@@ -774,7 +1284,9 @@ def build_final_payload(
     }
 
 
-def run_scraper(args: argparse.Namespace) -> Dict[str, Any]:
+def run_scraper(
+    args: argparse.Namespace,
+) -> Dict[str, Any]:
     aggregate: Dict[str, Any] = {
         "_disciplinas_by_codigo": {},
         "_turmas_by_key": {},
@@ -784,12 +1296,18 @@ def run_scraper(args: argparse.Namespace) -> Dict[str, Any]:
     unidades_com_erro: List[Dict[str, str]] = []
 
     with sync_playwright() as playwright:
-        browser: Browser = playwright.chromium.launch(headless=not args.headful, slow_mo=args.slow_mo)
+        browser: Browser = playwright.chromium.launch(
+            headless=not args.headful,
+            slow_mo=args.slow_mo,
+        )
 
         context: BrowserContext = browser.new_context(
             locale="pt-BR",
             timezone_id="America/Bahia",
-            viewport={"width": 1366, "height": 900},
+            viewport={
+                "width": 1366,
+                "height": 900,
+            },
             user_agent=(
                 "Mozilla/5.0 (X11; Linux x86_64) "
                 "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -804,14 +1322,30 @@ def run_scraper(args: argparse.Namespace) -> Dict[str, Any]:
             unidades = discover_unidades(page, args)
 
             if not unidades:
-                raise RuntimeError("Nenhuma unidade válida encontrada.")
+                raise RuntimeError(
+                    "Nenhuma unidade válida encontrada."
+                )
 
             total = len(unidades)
 
-            for index, unidade in enumerate(unidades, start=1):
+            for index, unidade in enumerate(
+                unidades,
+                start=1,
+            ):
                 try:
-                    partial = scrape_unidade(page, args, unidade, index=index, total=total)
-                    merge_results(aggregate, partial)
+                    partial = scrape_unidade(
+                        page,
+                        args,
+                        unidade,
+                        index=index,
+                        total=total,
+                    )
+
+                    merge_results(
+                        aggregate,
+                        partial,
+                    )
+
                     unidades_processadas += 1
 
                 except Exception as exc:
@@ -831,7 +1365,11 @@ def run_scraper(args: argparse.Namespace) -> Dict[str, Any]:
                     )
 
                     try:
-                        page.goto(SIGAA_TURMAS_URL, wait_until="domcontentloaded", timeout=args.timeout)
+                        page.goto(
+                            SIGAA_TURMAS_URL,
+                            wait_until="domcontentloaded",
+                            timeout=args.timeout,
+                        )
                         safe_wait_networkidle(page)
                     except Exception:
                         pass
@@ -853,9 +1391,12 @@ def run_scraper(args: argparse.Namespace) -> Dict[str, Any]:
 
 def main() -> None:
     args = parse_args()
+
     logging.basicConfig(
         level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(message)s",
+        format=(
+            "%(asctime)s [%(levelname)s] %(message)s"
+        ),
     )
 
     semester = f"{args.ano}.{args.periodo}"
@@ -863,23 +1404,49 @@ def main() -> None:
 
     try:
         payload = run_scraper(args)
+
         output_path = Path(args.output)
         output_path.write_text(
-            json.dumps(payload, ensure_ascii=False, indent=2),
+            json.dumps(
+                payload,
+                ensure_ascii=False,
+                indent=2,
+            ),
             encoding="utf-8",
         )
-        record_extraction_summary(run_id, payload)
-        logging.info("Arquivo salvo: %s", output_path)
+
+        record_extraction_summary(
+            run_id,
+            payload,
+        )
+
         logging.info(
-            "Extração concluída: %s disciplinas, %s turmas, %s unidade(s) com erro.",
+            "Arquivo salvo: %s",
+            output_path,
+        )
+
+        logging.info(
+            "Extração concluída: %s disciplinas, "
+            "%s turmas, %s unidade(s) com erro.",
             payload["metadata"]["total_disciplinas"],
             payload["metadata"]["total_turmas"],
             payload["metadata"]["total_unidades_com_erro"],
         )
+
     except Exception as exc:
-        fail_scraper_run(run_id, exc, phase="extraction_failed")
+        fail_scraper_run(
+            run_id,
+            exc,
+            phase="extraction_failed",
+        )
+
         capture_unexpected_exception(exc)
-        logging.error("Falha geral na extração: %s", sanitize_error_message(exc))
+
+        logging.error(
+            "Falha geral na extração: %s",
+            sanitize_error_message(exc),
+        )
+
         raise SystemExit(1)
 
 

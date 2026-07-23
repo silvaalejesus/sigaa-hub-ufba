@@ -40,7 +40,40 @@ jobs:
         run: python -m playwright install --with-deps chromium
 
       - name: Extrair dados públicos do SIGAA — 2026.2
-        run: python scraper.py --ano 2026 --periodo 2 --output dados_sigaa.json
+        run: >
+          python scraper.py
+          --ano 2026
+          --periodo 2
+          --debug-html
+          --output dados_sigaa.json
+
+      - name: Validar resultado da coleta
+        run: |
+          python - <<'PY'
+          import json
+          import sys
+
+          with open("dados_sigaa.json", encoding="utf-8") as arquivo:
+              dados = json.load(arquivo)
+
+          metadata = dados.get("metadata", {})
+          disciplinas = dados.get("disciplinas", [])
+          turmas = dados.get("turmas", [])
+
+          print(f"Semestre: {metadata.get('semestre')}")
+          print(f"Unidades encontradas: {metadata.get('total_unidades_encontradas')}")
+          print(f"Unidades processadas: {metadata.get('total_unidades_processadas')}")
+          print(f"Unidades com erro: {metadata.get('total_unidades_com_erro')}")
+          print(f"Disciplinas: {len(disciplinas)}")
+          print(f"Turmas: {len(turmas)}")
+
+          if not disciplinas or not turmas:
+              print("Erro: a coleta retornou zero disciplinas ou zero turmas.")
+              sys.exit(1)
+
+          if metadata.get("total_unidades_com_erro", 0) > 0:
+              print("Aviso: houve unidades com erro durante a coleta.")
+          PY
 
       - name: Sincronizar dados no Supabase
         run: python seed.py --input dados_sigaa.json
