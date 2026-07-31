@@ -80,10 +80,24 @@ export async function buscarDisciplinas({
     }),
   );
 
+  // Log total de disciplinas encontradas (server-side)
+  const totalDisciplinas = disciplinas.length;
+  if (trimmedDepartamento.length > 0) {
+    console.log(
+      `[SIGAA Hub] Departamento "${trimmedDepartamento}" — disciplinas encontradas: ${totalDisciplinas}`,
+    );
+  } else {
+    console.log(`[SIGAA Hub] Disciplinas encontradas: ${totalDisciplinas}`);
+  }
+
   if (apenasComGrupos) {
-    return disciplinas.filter((disciplina) =>
+    const filtradas = disciplinas.filter((disciplina) =>
       disciplina.turmas.some((turma) => turma.links.length > 0),
     );
+    console.log(
+      `[SIGAA Hub] Apenas com grupos: disciplinas retornadas: ${filtradas.length}`,
+    );
+    return filtradas;
   }
 
   return disciplinas;
@@ -123,5 +137,8 @@ export async function buscarDepartamentos(): Promise<string[]> {
     }
   }
 
-  return Array.from(departamentos);
+  const result = Array.from(departamentos);
+  console.log(`[SIGAA Hub] Total departamentos: ${result.length}`);
+
+  return result;
 }

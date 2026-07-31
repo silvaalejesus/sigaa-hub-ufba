@@ -1,18 +1,23 @@
 import { SearchX } from "lucide-react";
 
 import { DisciplinaCard } from "@/features/disciplinas/components/disciplina-card";
+import { PaginationControls } from "@/features/disciplinas/components/pagination-controls";
 import { buscarDisciplinas } from "@/features/disciplinas/queries";
 
 interface DisciplinaListProps {
   query?: string;
   departamento?: string;
   apenasComGrupos?: boolean;
+  page?: number;
+  pageSize?: number;
 }
 
 export async function DisciplinaList({
   query,
   departamento,
   apenasComGrupos = false,
+  page = 1,
+  pageSize = 10,
 }: DisciplinaListProps) {
   const disciplinas = await buscarDisciplinas({
     query,
@@ -36,12 +41,30 @@ export async function DisciplinaList({
     );
   }
 
+  const totalItems = disciplinas.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  const currentPage = Math.min(Math.max(page, 1), totalPages);
+  const startIndex = (currentPage - 1) * pageSize;
+  const disciplinasDaPagina = disciplinas.slice(
+    startIndex,
+    startIndex + pageSize,
+  );
+
   return (
-    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-      {disciplinas.map((disciplina) => (
-        <DisciplinaCard key={disciplina.id} disciplina={disciplina} />
-      ))}
-    </div>
+    <>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {disciplinasDaPagina.map((disciplina) => (
+          <DisciplinaCard key={disciplina.id} disciplina={disciplina} />
+        ))}
+      </div>
+
+      <PaginationControls
+        currentPage={currentPage}
+        pageSize={pageSize}
+        totalItems={totalItems}
+        totalPages={totalPages}
+      />
+    </>
   );
 }
 
@@ -61,7 +84,6 @@ function EmptyState({
       <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-full bg-background">
         <SearchX className="size-6 text-muted-foreground" />
       </div>
-
       {hasFilter ? (
         <>
           <h3 className="text-lg font-semibold">

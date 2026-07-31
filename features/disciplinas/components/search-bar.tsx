@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-
 import {
   Building2,
   Check,
@@ -10,7 +9,11 @@ import {
   UsersRound,
   X,
 } from 'lucide-react'
-import { usePathname, useRouter } from 'next/navigation'
+import {
+  usePathname,
+  useRouter,
+  useSearchParams,
+} from 'next/navigation'
 
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -48,7 +51,7 @@ export function SearchBar({
 }: SearchBarProps) {
   const router = useRouter()
   const pathname = usePathname()
-
+  const searchParams = useSearchParams()
   const [term, setTerm] = useState(defaultValue)
   const [departamento, setDepartamento] = useState(defaultDepartamento)
   const [apenasComGrupos, setApenasComGrupos] = useState(
@@ -56,7 +59,6 @@ export function SearchBar({
   )
   const [openDepartamento, setOpenDepartamento] = useState(false)
   const [departamentoSearch, setDepartamentoSearch] = useState('')
-
   const debouncedTerm = useDebouncedValue(term, 300)
   const hasMounted = useRef(false)
 
@@ -78,11 +80,15 @@ export function SearchBar({
     apenasComGrupos?: boolean
   }) {
     const params = new URLSearchParams()
-
+    const currentPageSize = searchParams.get('porPagina')
     const nextQuery = nextValues.q ?? term
     const nextDepartamento = nextValues.departamento ?? departamento
     const nextApenasComGrupos =
       nextValues.apenasComGrupos ?? apenasComGrupos
+
+    if (currentPageSize) {
+      params.set('porPagina', currentPageSize)
+    }
 
     if (nextQuery.trim().length > 0) {
       params.set('q', nextQuery.trim())
@@ -122,6 +128,13 @@ export function SearchBar({
     setDepartamento(nextDepartamento)
     setOpenDepartamento(false)
     setDepartamentoSearch('')
+    // Client-side logs: total departments and selected department
+    try {
+      console.log(`[SIGAA Hub] Total departamentos (client): ${departamentos.length}`)
+      console.log(`[SIGAA Hub] Departamento selecionado (client): ${nextDepartamento}`)
+    } catch (e) {
+      // Silently ignore logging errors in environments without console
+    }
     syncUrl({ departamento: nextDepartamento })
   }
 
@@ -140,9 +153,7 @@ export function SearchBar({
           <label htmlFor="disciplina-search" className="sr-only">
             Buscar disciplina
           </label>
-
           <Search className="pointer-events-none absolute left-3.5 top-1/2 size-5 -translate-y-1/2 text-muted-foreground sm:left-4" />
-
           <Input
             id="disciplina-search"
             value={term}
@@ -152,7 +163,6 @@ export function SearchBar({
             enterKeyHint="search"
             className="h-12 min-w-0 border-0 bg-transparent pl-10 pr-11 text-sm shadow-none focus-visible:ring-0 sm:pl-12 sm:pr-12 sm:text-base"
           />
-
           {term.length > 0 && (
             <Button
               type="button"
@@ -182,22 +192,18 @@ export function SearchBar({
               >
                 <span className="flex min-w-0 flex-1 items-center gap-3">
                   <Building2 className="size-4 shrink-0 text-muted-foreground" />
-
                   <span className="min-w-0 flex-1">
                     <span className="block text-xs font-normal text-muted-foreground">
                       Instituto/Departamento
                     </span>
-
                     <span className="mt-0.5 line-clamp-2 block break-words text-sm font-medium leading-snug">
                       {departamento || 'Todos'}
                     </span>
                   </span>
                 </span>
-
                 <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground" />
               </Button>
             </PopoverTrigger>
-
             <PopoverContent
               className="w-[calc(100vw-3rem)] max-w-[460px] p-0 sm:w-[460px]"
               align="start"
@@ -208,7 +214,6 @@ export function SearchBar({
                   onValueChange={setDepartamentoSearch}
                   placeholder="Pesquisar instituto/departamento..."
                 />
-
                 <CommandList>
                   <CommandGroup>
                     <CommandItem
@@ -221,12 +226,10 @@ export function SearchBar({
                           departamento === '' ? 'opacity-100' : 'opacity-0',
                         )}
                       />
-
                       <span className="min-w-0 whitespace-normal break-words">
                         Todos os institutos/departamentos
                       </span>
                     </CommandItem>
-
                     {departamentosFiltrados.map((item) => (
                       <CommandItem
                         key={item}
@@ -241,14 +244,12 @@ export function SearchBar({
                               : 'opacity-0',
                           )}
                         />
-
                         <span className="min-w-0 whitespace-normal break-words leading-snug">
                           {item}
                         </span>
                       </CommandItem>
                     ))}
                   </CommandGroup>
-
                   {departamentosFiltrados.length === 0 && (
                     <CommandEmpty>
                       Nenhum departamento encontrado.
@@ -266,9 +267,7 @@ export function SearchBar({
               aria-label="Filtrar apenas disciplinas com grupos disponíveis"
               className="shrink-0"
             />
-
             <UsersRound className="size-4 shrink-0 text-muted-foreground" />
-
             <span className="min-w-0 whitespace-normal break-words font-medium leading-snug">
               Apenas com grupos disponíveis
             </span>

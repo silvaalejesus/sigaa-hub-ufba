@@ -8,20 +8,24 @@ import { Github, Linkedin } from "./ui/brand-icons";
 const usefulLinks = [
   {
     label: "Calendário acadêmico",
-    href: "#",
+    href: "https://supac.ufba.br/sites/supac.ufba.br/files/calendario_academico_2026.2_08.06.26.pdf",
   },
   {
     label: "Portal SIGAA UFBA",
-    href: "#",
+    href: "https://sigaa.ufba.br/sigaa/",
   },
   {
-    label: "Guia de matrícula",
-    href: "#",
+    label: "Extensão SIGAA Horários",
+    href: "https://github.com/ernestosrf/sigaa-horarios-extension",
   },
   {
-    label: "Status do sistema",
-    href: "/status",
+    label: "Planeje seu semestre",
+    href: "https://cadee.netlify.app/",
   },
+  // {
+  //   label: "Status do sistema",
+  //   href: "/status",
+  // },
 ];
 
 export function SiteFooter() {

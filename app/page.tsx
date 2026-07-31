@@ -9,41 +9,50 @@ import { SearchBar } from "@/features/disciplinas/components/search-bar";
 import { buscarDepartamentos } from "@/features/disciplinas/queries";
 import { CURRENT_SEMESTER } from "@/lib/semester";
 
+const DEFAULT_PAGE_SIZE = 10;
+const PAGE_SIZE_OPTIONS = [10, 20, 30, 50];
+
 interface HomePageProps {
   searchParams: Promise<{
     q?: string;
     departamento?: string;
     grupos?: string;
+    pagina?: string;
+    porPagina?: string;
   }>;
 }
 
 export default async function HomePage({ searchParams }: HomePageProps) {
-  const { q, departamento, grupos } = await searchParams;
+  const { q, departamento, grupos, pagina, porPagina } = await searchParams;
   const query = q?.trim() ?? "";
   const departamentoSelecionado = departamento?.trim() ?? "";
   const apenasComGrupos = grupos === "1";
+  const page = parsePositiveInteger(pagina, 1);
+  const requestedPageSize = parsePositiveInteger(
+    porPagina,
+    DEFAULT_PAGE_SIZE,
+  );
+  const pageSize = PAGE_SIZE_OPTIONS.includes(requestedPageSize)
+    ? requestedPageSize
+    : DEFAULT_PAGE_SIZE;
   const departamentos = await buscarDepartamentos();
 
   return (
     <>
       <SiteHeader />
-
       <main id="top" className="mx-auto w-full max-w-6xl px-4 py-8">
         <section className="rounded-[2rem] border bg-gradient-to-br from-background via-background to-muted/70 p-6 shadow-sm md:p-10">
           <p className="mb-4 inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-sm font-semibold text-emerald-700 dark:border-primary/20 dark:bg-primary/10 dark:text-primary">
             UFBA · Semestre {CURRENT_SEMESTER}
           </p>
-
           <h1 className="max-w-3xl text-3xl font-bold tracking-tight md:text-5xl">
             Encontre os grupos de WhatsApp das suas turmas
           </h1>
-
           <p className="mt-4 max-w-2xl text-base leading-7 text-muted-foreground md:text-lg">
             Pesquise disciplinas do SIGAA, veja as turmas abertas do semestre
             vigente e acesse os links dos grupos compartilhados pela comunidade.
             Tudo em um só lugar, sem precisar de conta.
           </p>
-
           <div className="mt-8">
             <Suspense fallback={<SearchBarSkeleton />}>
               <SearchBar
@@ -56,7 +65,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           </div>
         </section>
 
-        <section className="mt-10">
+        <section id="disciplinas" className="mt-10 scroll-mt-6">
           <div className="mb-5 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
             <div>
               <h2 className="text-2xl font-semibold">
@@ -64,7 +73,6 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                   ? `Resultados para "${query}"`
                   : "Disciplinas"}
               </h2>
-
               <p className="mt-1 text-sm text-muted-foreground">
                 {departamentoSelecionado
                   ? `Filtrando por ${departamentoSelecionado}.`
@@ -74,13 +82,15 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           </div>
 
           <Suspense
-            key={`${query}-${departamentoSelecionado}-${apenasComGrupos}`}
+            key={`${query}-${departamentoSelecionado}-${apenasComGrupos}-${page}-${pageSize}`}
             fallback={<ListSkeleton />}
           >
             <DisciplinaList
               query={query}
               departamento={departamentoSelecionado}
               apenasComGrupos={apenasComGrupos}
+              page={page}
+              pageSize={pageSize}
             />
           </Suspense>
         </section>
@@ -91,14 +101,12 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             title="Busca rápida"
             description="Digite o nome ou código da disciplina e veja as turmas do semestre vigente instantaneamente."
           />
-
           <FeatureCard
             icon={<MessageCircle className="size-5" />}
             title="Links colaborativos"
             description="Adicione e acesse links de convite do chat.whatsapp.com de forma comunitária."
             highlighted
           />
-
           <FeatureCard
             icon={<ShieldCheck className="size-5" />}
             title="Moderação da comunidade"
@@ -106,11 +114,18 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           />
         </section>
       </main>
-
       <SiteFooter />
       <BackToTop />
     </>
   );
+}
+
+function parsePositiveInteger(value: string | undefined, fallback: number) {
+  const parsedValue = Number.parseInt(value ?? "", 10);
+
+  return Number.isFinite(parsedValue) && parsedValue > 0
+    ? parsedValue
+    : fallback;
 }
 
 function SearchBarSkeleton() {
@@ -158,9 +173,7 @@ function FeatureCard({
       >
         {icon}
       </div>
-
       <h3 className="font-semibold">{title}</h3>
-
       <p
         className={
           highlighted
