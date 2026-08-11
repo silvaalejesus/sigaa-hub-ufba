@@ -1,0 +1,587 @@
+diff --git a/.env.example b/.env.example
+index dddc31b..5579194 100644
+--- a/.env.example
++++ b/.env.example
+@@ -14,6 +14,10 @@ SENTRY_ORG=
+ SENTRY_PROJECT=
+ SENTRY_AUTH_TOKEN=
+ SENTRY_TRACES_SAMPLE_RATE=0.1
++
++# Google Analytics 4 — ID público do fluxo da Web (ex.: G-XXXXXXXXXX)
++NEXT_PUBLIC_GA_MEASUREMENT_ID=
++
+ # Status operacional
+ STATUS_STALE_AFTER_HOURS=384
+ 
+diff --git a/app/layout.tsx b/app/layout.tsx
+index 3fedd4f..a855b7b 100644
+--- a/app/layout.tsx
++++ b/app/layout.tsx
+@@ -1,6 +1,7 @@
+ import type { Metadata, Viewport } from 'next'
+ import { Geist_Mono, Space_Grotesk } from 'next/font/google'
+ 
++import { GoogleAnalytics } from '@/components/analytics/google-analytics'
+ import { ThemeProvider } from '@/components/theme-provider'
+ 
+ import './globals.css'
+@@ -33,6 +34,8 @@ export default function RootLayout({
+ }: Readonly<{
+   children: React.ReactNode
+ }>) {
++  const gaMeasurementId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID
++
+   return (
+     <html
+       lang="pt-BR"
+@@ -43,6 +46,9 @@ export default function RootLayout({
+         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+           {children}
+         </ThemeProvider>
++        {process.env.NODE_ENV === 'production' && gaMeasurementId ? (
++          <GoogleAnalytics measurementId={gaMeasurementId} />
++        ) : null}
+       </body>
+     </html>
+   )
+diff --git a/components/analytics/google-analytics.tsx b/components/analytics/google-analytics.tsx
+new file mode 100644
+index 0000000..9a8b826
+--- /dev/null
++++ b/components/analytics/google-analytics.tsx
+@@ -0,0 +1,80 @@
++'use client'
++
++import Script from 'next/script'
++import { usePathname } from 'next/navigation'
++import { useEffect } from 'react'
++
++interface GoogleAnalyticsProps {
++  measurementId: string
++}
++
++const GA_MEASUREMENT_ID_PATTERN = /^G-[A-Z0-9]+$/i
++const ANALYTICS_READY_EVENT = 'sigaa-hub:analytics-ready'
++
++function AnalyticsPageView({ measurementId }: GoogleAnalyticsProps) {
++  const pathname = usePathname()
++
++  useEffect(() => {
++    function sendPageView(): boolean {
++      if (typeof window.gtag !== 'function') return false
++
++      const pageLocation = `${window.location.origin}${pathname}`
++
++      window.gtag('config', measurementId, {
++        update: true,
++        page_location: pageLocation,
++        page_title: document.title,
++      })
++      window.gtag('event', 'page_view', {
++        page_location: pageLocation,
++        page_path: pathname,
++        page_title: document.title,
++      })
++
++      return true
++    }
++
++    if (sendPageView()) return
++
++    window.addEventListener(ANALYTICS_READY_EVENT, sendPageView, { once: true })
++
++    return () => window.removeEventListener(ANALYTICS_READY_EVENT, sendPageView)
++  }, [measurementId, pathname])
++
++  return null
++}
++
++export function GoogleAnalytics({ measurementId }: GoogleAnalyticsProps) {
++  const normalizedMeasurementId = measurementId.trim().toUpperCase()
++
++  if (!GA_MEASUREMENT_ID_PATTERN.test(normalizedMeasurementId)) {
++    return null
++  }
++
++  const serializedMeasurementId = JSON.stringify(normalizedMeasurementId)
++
++  return (
++    <>
++      <Script
++        src={`https://www.googletagmanager.com/gtag/js?id=${normalizedMeasurementId}`}
++        strategy="afterInteractive"
++      />
++      <Script id="google-analytics-4" strategy="afterInteractive">
++        {`
++          window.dataLayer = window.dataLayer || [];
++          function gtag(){window.dataLayer.push(arguments);}
++          window.gtag = gtag;
++          gtag('js', new Date());
++          gtag('config', ${serializedMeasurementId}, {
++            send_page_view: false,
++            page_location: window.location.origin + window.location.pathname,
++            allow_google_signals: false,
++            allow_ad_personalization_signals: false
++          });
++          window.dispatchEvent(new Event('${ANALYTICS_READY_EVENT}'));
++        `}
++      </Script>
++      <AnalyticsPageView measurementId={normalizedMeasurementId} />
++    </>
++  )
++}
+diff --git a/components/feedback-form.tsx b/components/feedback-form.tsx
+index 0a60148..6f9a758 100644
+--- a/components/feedback-form.tsx
++++ b/components/feedback-form.tsx
+@@ -20,6 +20,7 @@ import {
+   feedbackSchema,
+   type FeedbackFormData,
+ } from '@/features/feedback/schema'
++import { trackAnalyticsEvent } from '@/lib/analytics/google-analytics'
+ import { formatCharacterCount } from '@/lib/forms/character-count'
+ const SUCCESS_MESSAGE = 'Obrigada! Sua sugestão foi enviada com sucesso.'
+ const FAILURE_MESSAGE = 'Não foi possível enviar sua sugestão. Tente novamente.'
+@@ -77,6 +78,7 @@ export function FeedbackForm() {
+         return
+       }
+       toast.success(SUCCESS_MESSAGE)
++      trackAnalyticsEvent('feedback_submitted')
+       reset()
+     } catch {
+       captureNetlifyFormsFailure('network-or-runtime')
+diff --git a/docs/GOOGLE_ANALYTICS.md b/docs/GOOGLE_ANALYTICS.md
+new file mode 100644
+index 0000000..91a8ba2
+--- /dev/null
++++ b/docs/GOOGLE_ANALYTICS.md
+@@ -0,0 +1,82 @@
++# Google Analytics 4
++
++## Objetivo
++
++O SIGAA Hub usa o Google Analytics 4 para medir navegação e interações de
++produto. A integração não envia termos pesquisados, nomes de departamentos,
++professores, URLs de grupos, motivos de denúncia ou dados do formulário de
++feedback.
++
++O carregamento ocorre somente em produção e apenas quando
++`NEXT_PUBLIC_GA_MEASUREMENT_ID` contém um ID válido iniciado por `G-`.
++
++## Configuração
++
++1. No Google Analytics, crie uma propriedade GA4.
++2. Crie um fluxo de dados do tipo **Web** para o domínio publicado.
++3. No fluxo Web, desative o envio de `page_view` por mudanças no histórico em
++   **Medição otimizada**, pois o projeto envia pageviews manualmente.
++4. Se quiser impedir que o GA4 capture termos de busca automaticamente, também
++   desative a medição de **Pesquisa no site**.
++5. Copie o ID de métricas no formato `G-XXXXXXXXXX`.
++6. No Netlify, abra **Site configuration > Environment variables**.
++7. Crie:
++
++   ```text
++   NEXT_PUBLIC_GA_MEASUREMENT_ID=G-XXXXXXXXXX
++   ```
++
++8. Faça um novo deploy.
++9. Valide em **Relatórios > Tempo real** e no DebugView/Tag Assistant.
++
++## Eventos personalizados
++
++| Evento | Significado | Parâmetros |
++| --- | --- | --- |
++| `page_view` | Navegação por página, sem query string | `page_path`, `page_title`, `page_location` |
++| `search_filter_changed` | Busca textual aplicada ou removida | `has_query`, `query_length` |
++| `department_filter_changed` | Filtro de departamento alterado | `selected` |
++| `groups_filter_changed` | Filtro “apenas com grupos” alterado | `enabled` |
++| `pagination_changed` | Usuário mudou de página | `from_page`, `to_page`, `page_size`, `total_pages` |
++| `page_size_changed` | Quantidade de itens por página alterada | `previous_page_size`, `page_size`, `total_items` |
++| `course_classes_opened` | Modal de turmas aberto | `course_code`, `total_classes`, `active_groups` |
++| `whatsapp_group_opened` | Link externo do grupo acionado | `course_code`, `class_code` |
++| `add_link_form_opened` | Formulário de contribuição aberto | `course_code`, `class_code` |
++| `link_submitted` | Novo link enviado com sucesso | `course_code`, `class_code` |
++| `report_form_opened` | Formulário de denúncia aberto | `course_code`, `class_code` |
++| `report_submitted` | Denúncia enviada com sucesso | `course_code`, `class_code`, `reports_count`, `link_active` |
++| `feedback_submitted` | Feedback enviado com sucesso | sem parâmetros |
++
++## Privacidade
++
++A integração:
++
++- envia `page_location` sem query string;
++- desativa `allow_google_signals`;
++- desativa `allow_ad_personalization_signals`;
++- bloqueia parâmetros com nomes associados a e-mail, nome, URL, link, motivo,
++  texto de feedback, professor, IP ou identificador de usuário;
++- limita parâmetros textuais a 100 caracteres;
++- não registra o conteúdo da busca, somente se existe busca e seu tamanho;
++- não registra qual departamento foi selecionado, somente se existe filtro.
++
++Antes de ativar a coleta, mantenha a política de privacidade do site atualizada
++e defina a estratégia de consentimento aplicável ao projeto.
++
++## Validação técnica
++
++Execute:
++
++```bash
++pnpm lint
++pnpm typecheck
++pnpm test
++pnpm build
++```
++
++Em produção, confirme no DevTools que:
++
++- `gtag/js?id=G-...` foi carregado;
++- requisições para `google-analytics.com` não foram bloqueadas pela CSP;
++- `page_location` não contém `q`, `departamento`, `pagina` ou `porPagina`;
++- nenhum evento contém URL de WhatsApp, termo de busca ou dados de feedback.
+diff --git a/features/disciplinas/components/disciplina-card.tsx b/features/disciplinas/components/disciplina-card.tsx
+index b1a07de..3dbecc9 100644
+--- a/features/disciplinas/components/disciplina-card.tsx
++++ b/features/disciplinas/components/disciplina-card.tsx
+@@ -20,6 +20,7 @@ import type { ReportLinkSuccess } from "@/features/turmas/action-results";
+ import { AddLinkInlineForm } from "@/features/turmas/components/add-link-inline-form";
+ import { ReportInlineForm } from "@/features/turmas/components/report-inline-form";
+ import { REPORTS_DEACTIVATION_THRESHOLD } from "@/features/turmas/constants";
++import { trackAnalyticsEvent } from "@/lib/analytics/google-analytics";
+ import { useBodyScrollLock } from "@/lib/hooks/use-body-scroll-lock";
+ import { cn } from "@/lib/utils";
+ import type { DisciplinaComTurmas } from "@/types/database";
+@@ -99,6 +100,11 @@ export function DisciplinaCard({ disciplina }: DisciplinaCardProps) {
+           className="mt-5 w-full"
+           onClick={() => {
+             closeInlineForms();
++            trackAnalyticsEvent("course_classes_opened", {
++              course_code: disciplina.codigo,
++              total_classes: totalTurmas,
++              active_groups: totalLinks,
++            });
+             setOpen(true);
+           }}
+         >
+@@ -177,6 +183,12 @@ export function DisciplinaCard({ disciplina }: DisciplinaCardProps) {
+                             target="_blank"
+                             rel="noopener noreferrer"
+                             className={cn(buttonVariants({ size: "sm" }))}
++                            onClick={() =>
++                              trackAnalyticsEvent("whatsapp_group_opened", {
++                                course_code: disciplina.codigo,
++                                class_code: turma.codigo_turma,
++                              })
++                            }
+                           >
+                             <ExternalLink
+                               className="size-4"
+@@ -189,6 +201,12 @@ export function DisciplinaCard({ disciplina }: DisciplinaCardProps) {
+                             size="sm"
+                             variant="ghost"
+                             onClick={() => {
++                              if (!isReportingThisLink) {
++                                trackAnalyticsEvent("report_form_opened", {
++                                  course_code: disciplina.codigo,
++                                  class_code: turma.codigo_turma,
++                                });
++                              }
+                               setEditingTurmaId(null);
+                               setReportingLinkId(
+                                 isReportingThisLink ? null : link.id,
+@@ -205,6 +223,12 @@ export function DisciplinaCard({ disciplina }: DisciplinaCardProps) {
+                           size="sm"
+                           variant="outline"
+                           onClick={() => {
++                            if (!isEditingThisTurma) {
++                              trackAnalyticsEvent("add_link_form_opened", {
++                                course_code: disciplina.codigo,
++                                class_code: turma.codigo_turma,
++                              });
++                            }
+                             setReportingLinkId(null);
+                             setEditingTurmaId(
+                               isEditingThisTurma ? null : turma.id,
+@@ -225,7 +249,13 @@ export function DisciplinaCard({ disciplina }: DisciplinaCardProps) {
+                       turmaId={turma.id}
+                       codigoTurma={turma.codigo_turma}
+                       onCancel={() => setEditingTurmaId(null)}
+-                      onSuccess={() => setEditingTurmaId(null)}
++                      onSuccess={() => {
++                        trackAnalyticsEvent("link_submitted", {
++                          course_code: disciplina.codigo,
++                          class_code: turma.codigo_turma,
++                        });
++                        setEditingTurmaId(null);
++                      }}
+                     />
+                   )}
+                   {link && isReportingThisLink && (
+@@ -234,9 +264,15 @@ export function DisciplinaCard({ disciplina }: DisciplinaCardProps) {
+                       codigoTurma={turma.codigo_turma}
+                       initialReportsCount={reportsCount}
+                       onCancel={() => setReportingLinkId(null)}
+-                      onSuccess={(result) =>
+-                        handleReportSuccess(link.id, result)
+-                      }
++                      onSuccess={(result) => {
++                        trackAnalyticsEvent("report_submitted", {
++                          course_code: disciplina.codigo,
++                          class_code: turma.codigo_turma,
++                          reports_count: result.reportsCount,
++                          link_active: result.isActive,
++                        });
++                        handleReportSuccess(link.id, result);
++                      }}
+                     />
+                   )}
+                 </section>
+diff --git a/features/disciplinas/components/pagination-controls.tsx b/features/disciplinas/components/pagination-controls.tsx
+index 69f3705..fc0569d 100644
+--- a/features/disciplinas/components/pagination-controls.tsx
++++ b/features/disciplinas/components/pagination-controls.tsx
+@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react'
+ import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+ 
+ import { Button } from '@/components/ui/button'
++import { trackAnalyticsEvent } from '@/lib/analytics/google-analytics'
+ 
+ const PAGE_SIZE_OPTIONS = [10, 20, 30, 50]
+ 
+@@ -29,6 +30,21 @@ export function PaginationControls({
+   const lastItem = Math.min(currentPage * pageSize, totalItems)
+   const pageItems = getPageItems(currentPage, totalPages)
+   function updatePagination(nextPage: number, nextPageSize = pageSize) {
++    if (nextPageSize !== pageSize) {
++      trackAnalyticsEvent('page_size_changed', {
++        previous_page_size: pageSize,
++        page_size: nextPageSize,
++        total_items: totalItems,
++      })
++    } else if (nextPage !== currentPage) {
++      trackAnalyticsEvent('pagination_changed', {
++        from_page: currentPage,
++        to_page: nextPage,
++        page_size: pageSize,
++        total_pages: totalPages,
++      })
++    }
++
+     const params = new URLSearchParams(searchParams.toString())
+ 
+     if (nextPage <= 1) {
+diff --git a/features/disciplinas/components/search-bar.tsx b/features/disciplinas/components/search-bar.tsx
+index 830c3a4..655e9b2 100644
+--- a/features/disciplinas/components/search-bar.tsx
++++ b/features/disciplinas/components/search-bar.tsx
+@@ -30,6 +30,7 @@ import {
+   PopoverContent,
+   PopoverTrigger,
+ } from '@/components/ui/popover'
++import { trackAnalyticsEvent } from '@/lib/analytics/google-analytics'
+ import { cn } from '@/lib/utils'
+ import { useDebouncedValue } from '@/utils/use-debounced-value'
+ interface SearchBarProps {
+@@ -108,6 +109,11 @@ export function SearchBar({
+       return
+     }
+ 
++    const normalizedQueryLength = debouncedTerm.trim().length
++    trackAnalyticsEvent('search_filter_changed', {
++      has_query: normalizedQueryLength > 0,
++      query_length: normalizedQueryLength,
++    })
+     syncUrl({ q: debouncedTerm })
+     // eslint-disable-next-line react-hooks/exhaustive-deps
+   }, [debouncedTerm, pathname, router])
+@@ -120,17 +126,14 @@ export function SearchBar({
+     setDepartamento(nextDepartamento)
+     setOpenDepartamento(false)
+     setDepartamentoSearch('')
+-    // Client-side logs: total departments and selected department
+-    try {
+-      console.log(`[SIGAA Hub] Total departamentos (client): ${departamentos.length}`)
+-      console.log(`[SIGAA Hub] Departamento selecionado (client): ${nextDepartamento}`)
+-    } catch (e) {
+-      // Silently ignore logging errors in environments without console
+-    }
++    trackAnalyticsEvent('department_filter_changed', {
++      selected: nextDepartamento.trim().length > 0,
++    })
+     syncUrl({ departamento: nextDepartamento })
+   }
+   function handleApenasComGruposChange(nextValue: boolean) {
+     setApenasComGrupos(nextValue)
++    trackAnalyticsEvent('groups_filter_changed', { enabled: nextValue })
+     syncUrl({ apenasComGrupos: nextValue })
+   }
+   return (
+diff --git a/lib/analytics/google-analytics.ts b/lib/analytics/google-analytics.ts
+new file mode 100644
+index 0000000..1e55e99
+--- /dev/null
++++ b/lib/analytics/google-analytics.ts
+@@ -0,0 +1,98 @@
++export type AnalyticsEventName =
++  | 'search_filter_changed'
++  | 'department_filter_changed'
++  | 'groups_filter_changed'
++  | 'pagination_changed'
++  | 'page_size_changed'
++  | 'course_classes_opened'
++  | 'whatsapp_group_opened'
++  | 'add_link_form_opened'
++  | 'link_submitted'
++  | 'report_form_opened'
++  | 'report_submitted'
++  | 'feedback_submitted'
++
++type AnalyticsParameterValue = string | number | boolean
++type AnalyticsParameters = Record<string, AnalyticsParameterValue | null | undefined>
++
++const MAX_PARAMETER_STRING_LENGTH = 100
++const BLOCKED_PARAMETER_NAMES = new Set([
++  'email',
++  'name',
++  'nome',
++  'url',
++  'link',
++  'link_url',
++  'reason',
++  'motivo',
++  'query',
++  'search_term',
++  'professor',
++  'user_id',
++  'ip',
++  'ip_address',
++])
++
++declare global {
++  interface Window {
++    dataLayer?: unknown[]
++    gtag?: (...args: unknown[]) => void
++  }
++}
++
++function isBlockedParameter(parameterName: string): boolean {
++  const normalizedName = parameterName.trim().toLowerCase()
++
++  return (
++    BLOCKED_PARAMETER_NAMES.has(normalizedName) ||
++    normalizedName.endsWith('_url') ||
++    normalizedName.includes('whatsapp_link') ||
++    normalizedName.includes('report_reason') ||
++    normalizedName.includes('feedback_text')
++  )
++}
++
++export function sanitizeAnalyticsParameters(
++  parameters: AnalyticsParameters,
++): Record<string, AnalyticsParameterValue> {
++  const sanitizedEntries: Array<[string, AnalyticsParameterValue]> = []
++
++  for (const [parameterName, value] of Object.entries(parameters)) {
++    if (
++      value === null ||
++      value === undefined ||
++      isBlockedParameter(parameterName)
++    ) {
++      continue
++    }
++
++    if (typeof value === 'string') {
++      const sanitizedValue = value
++        .replace(/[\u0000-\u001F\u007F]/g, ' ')
++        .trim()
++        .slice(0, MAX_PARAMETER_STRING_LENGTH)
++
++      if (sanitizedValue) {
++        sanitizedEntries.push([parameterName, sanitizedValue])
++      }
++      continue
++    }
++
++    sanitizedEntries.push([parameterName, value])
++  }
++
++  return Object.fromEntries(sanitizedEntries)
++}
++
++export function trackAnalyticsEvent(
++  eventName: AnalyticsEventName,
++  parameters: AnalyticsParameters = {},
++): void {
++  if (typeof window === 'undefined' || typeof window.gtag !== 'function') return
++
++  window.gtag('event', eventName, {
++    ...sanitizeAnalyticsParameters(parameters),
++    page_location: `${window.location.origin}${window.location.pathname}`,
++    page_title: document.title,
++  })
++}
+diff --git a/lib/security/security-headers.mjs b/lib/security/security-headers.mjs
+index 16d693e..81bc220 100644
+--- a/lib/security/security-headers.mjs
++++ b/lib/security/security-headers.mjs
+@@ -15,10 +15,14 @@ export function buildContentSecurityPolicyReportOnly(
+     "'self'",
+     "https://ingesteer.services-prod.nsvcs.net",
+   ]);
++  const scriptOrigins = new Set(["'self'", "'unsafe-inline'"]);
+   const supabaseOrigin = safeOrigin(environment.NEXT_PUBLIC_SUPABASE_URL);
+   const sentryOrigin = safeOrigin(
+     environment.NEXT_PUBLIC_SENTRY_DSN || environment.SENTRY_DSN,
+   );
++  const googleAnalyticsEnabled = /^G-[A-Z0-9]+$/i.test(
++    environment.NEXT_PUBLIC_GA_MEASUREMENT_ID?.trim() || "",
++  );
+ 
+   if (supabaseOrigin) {
+     connectOrigins.add(supabaseOrigin);
+@@ -30,6 +34,15 @@ export function buildContentSecurityPolicyReportOnly(
+   } else {
+     connectOrigins.add("https://*.ingest.sentry.io");
+   }
++
++  if (googleAnalyticsEnabled) {
++    scriptOrigins.add("https://www.googletagmanager.com");
++    connectOrigins.add("https://www.google-analytics.com");
++    connectOrigins.add("https://*.google-analytics.com");
++    connectOrigins.add("https://analytics.google.com");
++    connectOrigins.add("https://*.analytics.google.com");
++  }
++
+   return [
+     "default-src 'self'",
+     "base-uri 'self'",
+@@ -39,7 +52,7 @@ export function buildContentSecurityPolicyReportOnly(
+     "img-src 'self' data: blob: https:",
+     "font-src 'self' data: https://fonts.gstatic.com",
+     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+-    "script-src 'self' 'unsafe-inline'",
++    `script-src ${[...scriptOrigins].join(" ")}`,
+     `connect-src ${[...connectOrigins].join(" ")}`,
+     "worker-src 'self' blob:",
+     "manifest-src 'self'",
+diff --git a/lib/security/security-headers.test.mjs b/lib/security/security-headers.test.mjs
+index 4e49c52..fa32c3d 100644
+--- a/lib/security/security-headers.test.mjs
++++ b/lib/security/security-headers.test.mjs
+@@ -27,4 +27,17 @@ test('CSP não usa wildcard amplo nem unsafe-eval', () => {
+   assert.equal(csp.includes('connect-src *'), false)
+   assert.equal(csp.includes('script-src *'), false)
+   assert.match(csp, /https:\/\/example\.supabase\.co/)
++  assert.equal(csp.includes('www.googletagmanager.com'), false)
++})
++
++test('CSP libera os endpoints necessários do GA4 quando configurado', () => {
++  const csp = buildContentSecurityPolicyReportOnly({
++    NEXT_PUBLIC_SUPABASE_URL: 'https://example.supabase.co',
++    NEXT_PUBLIC_GA_MEASUREMENT_ID: 'G-ABC1234567',
++  })
++
++  assert.match(csp, /https:\/\/www\.googletagmanager\.com/)
++  assert.match(csp, /https:\/\/www\.google-analytics\.com/)
++  assert.match(csp, /https:\/\/\*\.google-analytics\.com/)
++  assert.match(csp, /https:\/\/\*\.analytics\.google\.com/)
+ })

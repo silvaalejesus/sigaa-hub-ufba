@@ -1,37 +1,41 @@
-'use client'
+"use client";
 
-import { valibotResolver } from '@hookform/resolvers/valibot'
-import * as Sentry from '@sentry/nextjs'
-import { Loader2, Send } from 'lucide-react'
-import { useForm } from 'react-hook-form'
-import { toast } from 'sonner'
-import * as v from 'valibot'
+import { valibotResolver } from "@hookform/resolvers/valibot";
+import * as Sentry from "@sentry/nextjs";
+import { Loader2, Send } from "lucide-react";
+import { useForm } from "react-hook-form";
+import { toast } from "sonner";
+import * as v from "valibot";
 
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   FEEDBACK_EMAIL_MAX_LENGTH,
   FEEDBACK_MAX_LENGTH,
   FEEDBACK_NAME_MAX_LENGTH,
   NETLIFY_FEEDBACK_ENDPOINT,
-} from '@/features/feedback/constants'
-import { serializeFeedbackForm } from '@/features/feedback/netlify'
+} from "@/features/feedback/constants";
+import { serializeFeedbackForm } from "@/features/feedback/netlify";
 import {
   feedbackSchema,
   type FeedbackFormData,
-} from '@/features/feedback/schema'
-import { formatCharacterCount } from '@/lib/forms/character-count'
+} from "@/features/feedback/schema";
+import { trackAnalyticsEvent } from "@/lib/analytics/google-analytics";
+import { formatCharacterCount } from "@/lib/forms/character-count";
 
-const SUCCESS_MESSAGE = 'Obrigada! Sua sugestão foi enviada com sucesso.'
-const FAILURE_MESSAGE = 'Não foi possível enviar sua sugestão. Tente novamente.'
+const SUCCESS_MESSAGE = "Obrigada! Sua sugestão foi enviada com sucesso.";
+const FAILURE_MESSAGE =
+  "Não foi possível enviar sua sugestão. Tente novamente.";
 
 function captureNetlifyFormsFailure(kind: string): void {
   Sentry.withScope((scope) => {
-    scope.setTag('operation', 'feedback.netlify-forms')
-    scope.setTag('failure_kind', kind)
-    Sentry.captureException(new Error('Unexpected Netlify Forms submission failure'))
-  })
+    scope.setTag("operation", "feedback.netlify-forms");
+    scope.setTag("failure_kind", kind);
+    Sentry.captureException(
+      new Error("Unexpected Netlify Forms submission failure"),
+    );
+  });
 }
 
 export function FeedbackForm() {
@@ -44,50 +48,52 @@ export function FeedbackForm() {
     formState: { errors, isValid, isSubmitting },
   } = useForm<FeedbackFormData>({
     resolver: valibotResolver(feedbackSchema),
-    mode: 'onChange',
+    mode: "onChange",
     defaultValues: {
-      nome: '',
-      email: '',
-      descricao: '',
-      contact_company: '',
+      nome: "",
+      email: "",
+      descricao: "",
+      contact_company: "",
     },
-  })
+  });
 
-  const descricao = watch('descricao') ?? ''
-  const counterId = 'feedback-description-counter'
-  const errorId = 'feedback-description-error'
+  const descricao = watch("descricao") ?? "";
+  const counterId = "feedback-description-counter";
+  const errorId = "feedback-description-error";
 
   async function onSubmit(data: FeedbackFormData) {
-    const parsed = v.safeParse(feedbackSchema, data)
+    const parsed = v.safeParse(feedbackSchema, data);
     if (!parsed.success) {
-      const message = parsed.issues[0]?.message ?? 'Dados inválidos.'
-      setError('root', { type: 'validation', message })
-      toast.error(message)
-      return
+      const message = parsed.issues[0]?.message ?? "Dados inválidos.";
+      setError("root", { type: "validation", message });
+      toast.error(message);
+      return;
     }
 
     try {
       const response = await fetch(NETLIFY_FEEDBACK_ENDPOINT, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
+          "Content-Type": "application/x-www-form-urlencoded",
         },
         body: serializeFeedbackForm(parsed.output).toString(),
-      })
+      });
 
       if (!response.ok) {
-        if (response.status >= 500) captureNetlifyFormsFailure('server-response')
-        setError('root', { type: 'server', message: FAILURE_MESSAGE })
-        toast.error(FAILURE_MESSAGE)
-        return
+        if (response.status >= 500)
+          captureNetlifyFormsFailure("server-response");
+        setError("root", { type: "server", message: FAILURE_MESSAGE });
+        toast.error(FAILURE_MESSAGE);
+        return;
       }
 
-      toast.success(SUCCESS_MESSAGE)
-      reset()
+      toast.success(SUCCESS_MESSAGE);
+      trackAnalyticsEvent("feedback_submitted");
+      reset();
     } catch {
-      captureNetlifyFormsFailure('network-or-runtime')
-      setError('root', { type: 'server', message: FAILURE_MESSAGE })
-      toast.error(FAILURE_MESSAGE)
+      captureNetlifyFormsFailure("network-or-runtime");
+      setError("root", { type: "server", message: FAILURE_MESSAGE });
+      toast.error(FAILURE_MESSAGE);
     }
   }
 
@@ -113,7 +119,7 @@ export function FeedbackForm() {
           type="text"
           tabIndex={-1}
           autoComplete="off"
-          {...register('contact_company')}
+          {...register("contact_company")}
         />
       </div>
 
@@ -126,7 +132,7 @@ export function FeedbackForm() {
           maxLength={FEEDBACK_NAME_MAX_LENGTH}
           autoComplete="name"
           aria-invalid={Boolean(errors.nome)}
-          {...register('nome')}
+          {...register("nome")}
         />
         {errors.nome?.message && (
           <p className="text-xs text-destructive">{errors.nome.message}</p>
@@ -143,7 +149,7 @@ export function FeedbackForm() {
           maxLength={FEEDBACK_EMAIL_MAX_LENGTH}
           autoComplete="email"
           aria-invalid={Boolean(errors.email)}
-          {...register('email')}
+          {...register("email")}
         />
         {errors.email?.message && (
           <p className="text-xs text-destructive">{errors.email.message}</p>
@@ -160,7 +166,7 @@ export function FeedbackForm() {
           maxLength={FEEDBACK_MAX_LENGTH}
           aria-invalid={Boolean(errors.descricao || errors.root)}
           aria-describedby={`${counterId} ${errorId}`}
-          {...register('descricao')}
+          {...register("descricao")}
         />
         <div className="flex items-start justify-between gap-3">
           <div id={errorId}>
@@ -188,5 +194,5 @@ export function FeedbackForm() {
         Enviar sugestão
       </Button>
     </form>
-  )
+  );
 }

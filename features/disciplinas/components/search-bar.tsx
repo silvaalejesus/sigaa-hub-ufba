@@ -1,6 +1,5 @@
-'use client'
+"use client";
 
-import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Building2,
   Check,
@@ -8,15 +7,12 @@ import {
   Search,
   UsersRound,
   X,
-} from 'lucide-react'
-import {
-  usePathname,
-  useRouter,
-  useSearchParams,
-} from 'next/navigation'
+} from "lucide-react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
 
-import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Command,
   CommandEmpty,
@@ -24,123 +20,124 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-} from '@/components/ui/command'
-import { Input } from '@/components/ui/input'
+} from "@/components/ui/command";
+import { Input } from "@/components/ui/input";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from '@/components/ui/popover'
-import { cn } from '@/lib/utils'
-import { useDebouncedValue } from '@/utils/use-debounced-value'
+} from "@/components/ui/popover";
+import { trackAnalyticsEvent } from "@/lib/analytics/google-analytics";
+import { cn } from "@/lib/utils";
+import { useDebouncedValue } from "@/utils/use-debounced-value";
 
 interface SearchBarProps {
-  defaultValue?: string
-  defaultDepartamento?: string
-  defaultApenasComGrupos?: boolean
-  departamentos?: string[]
-  placeholder?: string
+  defaultValue?: string;
+  defaultDepartamento?: string;
+  defaultApenasComGrupos?: boolean;
+  departamentos?: string[];
+  placeholder?: string;
 }
 
 export function SearchBar({
-  defaultValue = '',
-  defaultDepartamento = '',
+  defaultValue = "",
+  defaultDepartamento = "",
   defaultApenasComGrupos = false,
   departamentos = [],
-  placeholder = 'Busque por nome ou código (ex: MATA37)',
+  placeholder = "Busque por nome ou código (ex: MATA37)",
 }: SearchBarProps) {
-  const router = useRouter()
-  const pathname = usePathname()
-  const searchParams = useSearchParams()
-  const [term, setTerm] = useState(defaultValue)
-  const [departamento, setDepartamento] = useState(defaultDepartamento)
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const [term, setTerm] = useState(defaultValue);
+  const [departamento, setDepartamento] = useState(defaultDepartamento);
   const [apenasComGrupos, setApenasComGrupos] = useState(
     defaultApenasComGrupos,
-  )
-  const [openDepartamento, setOpenDepartamento] = useState(false)
-  const [departamentoSearch, setDepartamentoSearch] = useState('')
-  const debouncedTerm = useDebouncedValue(term, 300)
-  const hasMounted = useRef(false)
+  );
+  const [openDepartamento, setOpenDepartamento] = useState(false);
+  const [departamentoSearch, setDepartamentoSearch] = useState("");
+  const debouncedTerm = useDebouncedValue(term, 300);
+  const hasMounted = useRef(false);
 
   const departamentosFiltrados = useMemo(() => {
-    const search = departamentoSearch.trim().toLowerCase()
+    const search = departamentoSearch.trim().toLowerCase();
 
     if (!search) {
-      return departamentos
+      return departamentos;
     }
 
-    return departamentos.filter((item) =>
-      item.toLowerCase().includes(search),
-    )
-  }, [departamentoSearch, departamentos])
+    return departamentos.filter((item) => item.toLowerCase().includes(search));
+  }, [departamentoSearch, departamentos]);
 
   function syncUrl(nextValues: {
-    q?: string
-    departamento?: string
-    apenasComGrupos?: boolean
+    q?: string;
+    departamento?: string;
+    apenasComGrupos?: boolean;
   }) {
-    const params = new URLSearchParams()
-    const currentPageSize = searchParams.get('porPagina')
-    const nextQuery = nextValues.q ?? term
-    const nextDepartamento = nextValues.departamento ?? departamento
-    const nextApenasComGrupos =
-      nextValues.apenasComGrupos ?? apenasComGrupos
+    const params = new URLSearchParams();
+    const currentPageSize = searchParams.get("porPagina");
+    const nextQuery = nextValues.q ?? term;
+    const nextDepartamento = nextValues.departamento ?? departamento;
+    const nextApenasComGrupos = nextValues.apenasComGrupos ?? apenasComGrupos;
 
     if (currentPageSize) {
-      params.set('porPagina', currentPageSize)
+      params.set("porPagina", currentPageSize);
     }
 
     if (nextQuery.trim().length > 0) {
-      params.set('q', nextQuery.trim())
+      params.set("q", nextQuery.trim());
     }
 
     if (nextDepartamento.trim().length > 0) {
-      params.set('departamento', nextDepartamento.trim())
+      params.set("departamento", nextDepartamento.trim());
     }
 
     if (nextApenasComGrupos) {
-      params.set('grupos', '1')
+      params.set("grupos", "1");
     }
 
-    const queryString = params.toString()
+    const queryString = params.toString();
 
     router.replace(queryString ? `${pathname}?${queryString}` : pathname, {
       scroll: false,
-    })
+    });
   }
 
   useEffect(() => {
     if (!hasMounted.current) {
-      hasMounted.current = true
-      return
+      hasMounted.current = true;
+      return;
     }
 
-    syncUrl({ q: debouncedTerm })
+    const normalizedQueryLength = debouncedTerm.trim().length;
+    trackAnalyticsEvent("search_filter_changed", {
+      has_query: normalizedQueryLength > 0,
+      query_length: normalizedQueryLength,
+    });
+
+    syncUrl({ q: debouncedTerm });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedTerm, pathname, router])
+  }, [debouncedTerm, pathname, router]);
 
   function handleClear() {
-    setTerm('')
-    syncUrl({ q: '' })
+    setTerm("");
+    syncUrl({ q: "" });
   }
 
   function handleSelectDepartamento(nextDepartamento: string) {
-    setDepartamento(nextDepartamento)
-    setOpenDepartamento(false)
-    setDepartamentoSearch('')
-    // Client-side logs: total departments and selected department
-    try {
-      console.log(`[SIGAA Hub] Total departamentos (client): ${departamentos.length}`)
-      console.log(`[SIGAA Hub] Departamento selecionado (client): ${nextDepartamento}`)
-    } catch (e) {
-      // Silently ignore logging errors in environments without console
-    }
-    syncUrl({ departamento: nextDepartamento })
+    setDepartamento(nextDepartamento);
+    setOpenDepartamento(false);
+    setDepartamentoSearch("");
+    trackAnalyticsEvent("department_filter_changed", {
+      selected: nextDepartamento.trim().length > 0,
+    });
+    syncUrl({ departamento: nextDepartamento });
   }
 
   function handleApenasComGruposChange(nextValue: boolean) {
-    setApenasComGrupos(nextValue)
-    syncUrl({ apenasComGrupos: nextValue })
+    setApenasComGrupos(nextValue);
+    trackAnalyticsEvent("groups_filter_changed", { enabled: nextValue });
+    syncUrl({ apenasComGrupos: nextValue });
   }
 
   return (
@@ -178,10 +175,7 @@ export function SearchBar({
         </form>
 
         <div className="grid min-w-0 gap-3 xl:grid-cols-[minmax(0,1fr)_auto]">
-          <Popover
-            open={openDepartamento}
-            onOpenChange={setOpenDepartamento}
-          >
+          <Popover open={openDepartamento} onOpenChange={setOpenDepartamento}>
             <PopoverTrigger asChild>
               <Button
                 type="button"
@@ -197,7 +191,7 @@ export function SearchBar({
                       Instituto/Departamento
                     </span>
                     <span className="mt-0.5 line-clamp-2 block break-words text-sm font-medium leading-snug">
-                      {departamento || 'Todos'}
+                      {departamento || "Todos"}
                     </span>
                   </span>
                 </span>
@@ -218,12 +212,12 @@ export function SearchBar({
                   <CommandGroup>
                     <CommandItem
                       value=""
-                      onSelect={() => handleSelectDepartamento('')}
+                      onSelect={() => handleSelectDepartamento("")}
                     >
                       <Check
                         className={cn(
-                          'size-4 shrink-0',
-                          departamento === '' ? 'opacity-100' : 'opacity-0',
+                          "size-4 shrink-0",
+                          departamento === "" ? "opacity-100" : "opacity-0",
                         )}
                       />
                       <span className="min-w-0 whitespace-normal break-words">
@@ -238,10 +232,8 @@ export function SearchBar({
                       >
                         <Check
                           className={cn(
-                            'size-4 shrink-0',
-                            departamento === item
-                              ? 'opacity-100'
-                              : 'opacity-0',
+                            "size-4 shrink-0",
+                            departamento === item ? "opacity-100" : "opacity-0",
                           )}
                         />
                         <span className="min-w-0 whitespace-normal break-words leading-snug">
@@ -251,9 +243,7 @@ export function SearchBar({
                     ))}
                   </CommandGroup>
                   {departamentosFiltrados.length === 0 && (
-                    <CommandEmpty>
-                      Nenhum departamento encontrado.
-                    </CommandEmpty>
+                    <CommandEmpty>Nenhum departamento encontrado.</CommandEmpty>
                   )}
                 </CommandList>
               </Command>
@@ -275,5 +265,5 @@ export function SearchBar({
         </div>
       </div>
     </div>
-  )
+  );
 }

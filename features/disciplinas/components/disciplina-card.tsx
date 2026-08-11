@@ -21,6 +21,7 @@ import type { ReportLinkSuccess } from "@/features/turmas/action-results";
 import { AddLinkInlineForm } from "@/features/turmas/components/add-link-inline-form";
 import { ReportInlineForm } from "@/features/turmas/components/report-inline-form";
 import { REPORTS_DEACTIVATION_THRESHOLD } from "@/features/turmas/constants";
+import { trackAnalyticsEvent } from "@/lib/analytics/google-analytics";
 import { useBodyScrollLock } from "@/lib/hooks/use-body-scroll-lock";
 import { cn } from "@/lib/utils";
 import type { DisciplinaComTurmas } from "@/types/database";
@@ -188,6 +189,12 @@ export function DisciplinaCard({ disciplina }: DisciplinaCardProps) {
                             target="_blank"
                             rel="noopener noreferrer"
                             className={cn(buttonVariants({ size: "sm" }))}
+                            onClick={() =>
+                              trackAnalyticsEvent("whatsapp_group_opened", {
+                                course_code: disciplina.codigo,
+                                class_code: turma.codigo_turma,
+                              })
+                            }
                           >
                             <ExternalLink
                               className="size-4"
@@ -200,6 +207,12 @@ export function DisciplinaCard({ disciplina }: DisciplinaCardProps) {
                             size="sm"
                             variant="ghost"
                             onClick={() => {
+                              if (!isReportingThisLink) {
+                                trackAnalyticsEvent("report_form_opened", {
+                                  course_code: disciplina.codigo,
+                                  class_code: turma.codigo_turma,
+                                });
+                              }
                               setEditingTurmaId(null);
                               setReportingLinkId(
                                 isReportingThisLink ? null : link.id,
@@ -237,7 +250,13 @@ export function DisciplinaCard({ disciplina }: DisciplinaCardProps) {
                       turmaId={turma.id}
                       codigoTurma={turma.codigo_turma}
                       onCancel={() => setEditingTurmaId(null)}
-                      onSuccess={() => setEditingTurmaId(null)}
+                      onSuccess={() => {
+                        trackAnalyticsEvent("link_submitted", {
+                          course_code: disciplina.codigo,
+                          class_code: turma.codigo_turma,
+                        });
+                        setEditingTurmaId(null);
+                      }}
                     />
                   )}
 
@@ -247,9 +266,15 @@ export function DisciplinaCard({ disciplina }: DisciplinaCardProps) {
                       codigoTurma={turma.codigo_turma}
                       initialReportsCount={reportsCount}
                       onCancel={() => setReportingLinkId(null)}
-                      onSuccess={(result) =>
-                        handleReportSuccess(link.id, result)
-                      }
+                      onSuccess={(result) => {
+                        trackAnalyticsEvent("report_submitted", {
+                          course_code: disciplina.codigo,
+                          class_code: turma.codigo_turma,
+                          reports_count: result.reportsCount,
+                          link_active: result.isActive,
+                        });
+                        handleReportSuccess(link.id, result);
+                      }}
                     />
                   )}
                 </section>
