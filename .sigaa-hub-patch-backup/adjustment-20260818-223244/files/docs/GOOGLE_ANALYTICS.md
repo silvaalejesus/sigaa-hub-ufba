@@ -4,7 +4,7 @@
 
 O SIGAA Hub usa o Google Analytics 4 para medir navegação e interações de produto. A integração não envia termos pesquisados, nomes de departamentos, professores, URLs de grupos, motivos de denúncia ou dados do formulário de feedback.
 
-O carregamento ocorre somente em produção e apenas quando `NEXT_PUBLIC_GA_MEASUREMENT_ID` contém um ID válido iniciado por `G-`.
+O carregamento ocorre somente em produção, quando `NEXT_PUBLIC_GA_MEASUREMENT_ID` contém um ID válido iniciado por `G-` e após consentimento explícito do visitante.
 
 ## Configuração
 
@@ -53,7 +53,7 @@ A integração:
 - não registra o conteúdo da busca, somente se existe busca e seu tamanho;
 - não registra qual departamento foi selecionado, somente se existe filtro.
 
-Mantenha a política de privacidade do site atualizada para refletir o uso do Google Analytics 4 e os dados tratados pela plataforma.
+A aplicação mantém o GA4 desativado até o visitante aceitar analytics. A preferência fica armazenada localmente no navegador e pode ser alterada em `/privacidade`.
 
 ## Validação técnica
 

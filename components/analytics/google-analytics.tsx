@@ -50,6 +50,12 @@ function AnalyticsPageView({ measurementId }: GoogleAnalyticsProps) {
 export function GoogleAnalytics({ measurementId }: GoogleAnalyticsProps) {
   const normalizedMeasurementId = measurementId.trim().toUpperCase();
 
+  // Only load Google Analytics in production to avoid dev-only script behaviors
+  // (like eval in third-party scripts) triggering CSP report-only violations.
+  const isProduction = process.env.NODE_ENV === "production";
+
+  if (!isProduction) return null;
+
   if (!GA_MEASUREMENT_ID_PATTERN.test(normalizedMeasurementId)) {
     return null;
   }

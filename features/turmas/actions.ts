@@ -19,6 +19,7 @@ import {
 } from "@/features/turmas/constants";
 import { captureUnexpectedError } from "@/lib/observability/capture-unexpected-error";
 import { getIdSuffix, writeSafeLog } from "@/lib/observability/safe-logger";
+import { notifyLinkAdded } from "@/lib/notifications/netlify-link-notification";
 import { createAbuseFingerprint } from "@/lib/security/abuse-fingerprint";
 import { createClient } from "@/lib/supabase/server";
 
@@ -31,7 +32,28 @@ const honeypotSchema = v.optional(
 );
 
 const adicionarLinkSchema = v.object({
+  // sigaa-hub-link-notification-v1
   turmaId: v.pipe(v.string(), v.uuid("Turma inválida.")),
+  nome: v.pipe(
+    v.string(),
+    v.trim(),
+    v.nonEmpty("Informe seu nome."),
+    v.minLength(3, "Informe um nome com pelo menos 3 caracteres."),
+    v.maxLength(100, "O nome deve ter no máximo 100 caracteres."),
+  ),
+  matricula: v.pipe(
+    v.string(),
+    v.trim(),
+    v.nonEmpty("Informe seu número de matrícula."),
+    v.regex(/^\d{5,20}$/, "Informe uma matrícula contendo apenas números."),
+  ),
+  email: v.pipe(
+    v.string(),
+    v.trim(),
+    v.nonEmpty("Informe seu e-mail."),
+    v.maxLength(254, "O e-mail deve ter no máximo 254 caracteres."),
+    v.email("Informe um e-mail válido."),
+  ),
   url: v.pipe(
     v.string(),
     v.trim(),
@@ -104,11 +126,17 @@ async function getFingerprint(
 export async function adicionarLink(
   turmaId: string,
   url: string,
+  nome: string,
+  matricula: string,
+  email: string,
   contactReference = "",
 ): Promise<AddLinkActionResult> {
   const parsed = v.safeParse(adicionarLinkSchema, {
     turmaId,
     url,
+    nome,
+    matricula,
+    email,
     contactReference,
   });
 
@@ -133,6 +161,9 @@ export async function adicionarLink(
       p_turma_id: parsed.output.turmaId,
       p_url_whatsapp: parsed.output.url,
       p_reporter_fingerprint: fingerprint,
+      p_submitter_name: parsed.output.nome,
+      p_submitter_registration: parsed.output.matricula,
+      p_submitter_email: parsed.output.email,
     } as any);
 
     if (error) {
@@ -155,7 +186,26 @@ export async function adicionarLink(
     }
 
     const result = mapAddRpcResult(data);
-    if (result.ok) revalidatePath("/");
+    if (result.ok) {
+      revalidatePath("/");
+
+      const notification = await notifyLinkAdded({
+        turmaId: parsed.output.turmaId,
+        whatsappUrl: parsed.output.url,
+        submitterName: parsed.output.nome,
+        submitterRegistration: parsed.output.matricula,
+        submitterEmail: parsed.output.email,
+      });
+
+      if (!notification.ok) {
+        writeSafeLog("warn", {
+          event: "link_notification_failed",
+          code: notification.code,
+          resourceIdSuffix: getIdSuffix(parsed.output.turmaId),
+          environment: process.env.CONTEXT ?? process.env.NODE_ENV,
+        });
+      }
+    }
     return result;
   } catch (error) {
     captureUnexpectedError(error, {

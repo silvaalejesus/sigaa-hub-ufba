@@ -83,20 +83,20 @@ export async function buscarDisciplinas({
   // Log total de disciplinas encontradas (server-side)
   const totalDisciplinas = disciplinas.length;
   if (trimmedDepartamento.length > 0) {
-    console.log(
-      `[SIGAA Hub] Departamento "${trimmedDepartamento}" — disciplinas encontradas: ${totalDisciplinas}`,
-    );
+    // console.log(
+    //   `[SIGAA Hub] Departamento "${trimmedDepartamento}" — disciplinas encontradas: ${totalDisciplinas}`,
+    // );
   } else {
-    console.log(`[SIGAA Hub] Disciplinas encontradas: ${totalDisciplinas}`);
+    // console.log(`[SIGAA Hub] Disciplinas encontradas: ;${totalDisciplinas}`);
   }
 
   if (apenasComGrupos) {
     const filtradas = disciplinas.filter((disciplina) =>
       disciplina.turmas.some((turma) => turma.links.length > 0),
     );
-    console.log(
-      `[SIGAA Hub] Apenas com grupos: disciplinas retornadas: ${filtradas.length}`,
-    );
+    // console.log(
+    //   `[SIGAA Hub] Apenas com grupos: disciplinas retornadas: ${filtradas.length}`,
+    // );
     return filtradas;
   }
 
@@ -138,7 +138,7 @@ export async function buscarDepartamentos(): Promise<string[]> {
   }
 
   const result = Array.from(departamentos);
-  console.log(`[SIGAA Hub] Total departamentos: ${result.length}`);
+  // console.log(`[SIGAA Hub] Total departamentos: ${result.length}`);
 
   return result;
 }

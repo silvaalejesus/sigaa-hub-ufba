@@ -26,10 +26,6 @@ const usefulLinks = [
   //   label: "Status do sistema",
   //   href: "/status",
   // },
-  {
-    label: "Privacidade",
-    href: "/privacidade",
-  },
 ];
 
 export function SiteFooter() {

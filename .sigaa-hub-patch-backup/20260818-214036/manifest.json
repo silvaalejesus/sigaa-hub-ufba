@@ -1,0 +1,83 @@
+{
+  "patch_id": "sigaa-hub-launch-readiness-2026-08-18",
+  "repo": "C:\\Users\\silva\\OneDrive\\Documentos\\dev\\sigaa-hub-ufba",
+  "created_at": "2026-08-18T21:40:36.349817-03:00",
+  "files": [
+    {
+      "path": "features/turmas/components/add-link-inline-form.tsx",
+      "existed": true
+    },
+    {
+      "path": "features/turmas/actions.ts",
+      "existed": true
+    },
+    {
+      "path": "app/layout.tsx",
+      "existed": true
+    },
+    {
+      "path": "components/site-footer.tsx",
+      "existed": true
+    },
+    {
+      "path": "lib/analytics/google-analytics.ts",
+      "existed": true
+    },
+    {
+      "path": "lib/security/security-headers.mjs",
+      "existed": true
+    },
+    {
+      "path": "lib/security/security-headers.test.mjs",
+      "existed": true
+    },
+    {
+      "path": ".env.example",
+      "existed": true
+    },
+    {
+      "path": "README.md",
+      "existed": true
+    },
+    {
+      "path": "docs/GOOGLE_ANALYTICS.md",
+      "existed": true
+    },
+    {
+      "path": "docs/LAUNCH_CHECKLIST.md",
+      "existed": false
+    },
+    {
+      "path": "public/__forms.html",
+      "existed": false
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "existed": false
+    },
+    {
+      "path": "app/privacidade/page.tsx",
+      "existed": false
+    },
+    {
+      "path": "components/analytics/analytics-consent.tsx",
+      "existed": false
+    },
+    {
+      "path": "components/analytics/analytics-preference-control.tsx",
+      "existed": false
+    },
+    {
+      "path": "lib/analytics/consent.ts",
+      "existed": false
+    },
+    {
+      "path": "lib/notifications/netlify-link-notification.ts",
+      "existed": false
+    },
+    {
+      "path": "supabase/migrations/20260818234000_link_submitter_identity.sql",
+      "existed": false
+    }
+  ]
+}

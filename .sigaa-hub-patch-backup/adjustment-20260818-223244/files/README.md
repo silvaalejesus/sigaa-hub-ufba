@@ -12,7 +12,7 @@ Plataforma pública e colaborativa para localizar turmas do semestre vigente e c
 - scraper Python/Playwright executado pelo GitHub Actions;
 - `/status` e `/api/health` para estado operacional.
 
-Vercel Analytics e Speed Insights foram descontinuados após a migração para o Netlify. O projeto usa Google Analytics 4 em produção, com parâmetros sensíveis bloqueados.
+Vercel Analytics e Speed Insights foram descontinuados após a migração para o Netlify. O projeto usa Google Analytics 4 em produção, carregado somente após consentimento explícito do visitante e com parâmetros sensíveis bloqueados.
 
 ## Desenvolvimento
 
@@ -54,7 +54,7 @@ A Fase 3 permanece não iniciada.
 - submissões de grupos coletam nome, matrícula e e-mail em armazenamento privado;
 - a identidade informada é administrativa e **não é verificada** enquanto não houver autenticação ou confirmação por e-mail;
 - notificações de novo link e feedback usam Netlify Forms + notification hooks;
-- GA4 é carregado em produção quando há um Measurement ID válido;
+- GA4 é carregado somente após consentimento explícito;
 - a CSP permanece em `report-only` por padrão e pode ser ativada com `SECURITY_CSP_MODE=enforce`;
 - o workflow `ci.yml` valida lint, tipos, testes e build.
 

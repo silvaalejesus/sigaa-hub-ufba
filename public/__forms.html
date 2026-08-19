@@ -2,14 +2,13 @@
 <html lang="pt-BR">
   <head>
     <meta charset="utf-8" />
-    <meta name="robots" content="noindex,nofollow" />
-    <title>Netlify Forms</title>
+    <title>SIGAA Hub — formulários Netlify</title>
   </head>
   <body>
+    <!-- Formulários estáticos para o detector do Netlify Forms. -->
     <form
       name="sigaa-hub-feedback"
       method="POST"
-      action="/__forms.html"
       data-netlify="true"
       data-netlify-honeypot="contact_company"
       hidden
@@ -18,6 +17,23 @@
       <input type="text" name="nome" />
       <input type="email" name="email" />
       <textarea name="descricao"></textarea>
+      <input type="text" name="contact_company" />
+    </form>
+
+    <form
+      name="sigaa-hub-link-added"
+      method="POST"
+      data-netlify="true"
+      data-netlify-honeypot="contact_company"
+      hidden
+    >
+      <input type="hidden" name="form-name" value="sigaa-hub-link-added" />
+      <input type="text" name="nome" />
+      <input type="text" name="matricula" />
+      <input type="email" name="email" />
+      <input type="text" name="turma_id" />
+      <input type="url" name="url_whatsapp" />
+      <input type="text" name="submitted_at" />
       <input type="text" name="contact_company" />
     </form>
   </body>

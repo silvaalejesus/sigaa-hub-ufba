@@ -2,6 +2,7 @@
 
 import { valibotResolver } from '@hookform/resolvers/valibot'
 import { Loader2, PlusCircle, X } from 'lucide-react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useTransition } from 'react'
 import { useForm } from 'react-hook-form'
@@ -16,6 +17,27 @@ const WHATSAPP_INVITE_REGEX =
   /^https:\/\/chat\.whatsapp\.com\/[A-Za-z0-9_-]+\/?$/
 
 const addLinkSchema = v.object({
+  // sigaa-hub-private-link-submitter-v1
+  nome: v.pipe(
+    v.string(),
+    v.trim(),
+    v.nonEmpty('Informe seu nome.'),
+    v.minLength(3, 'Informe um nome com pelo menos 3 caracteres.'),
+    v.maxLength(100, 'O nome deve ter no máximo 100 caracteres.'),
+  ),
+  matricula: v.pipe(
+    v.string(),
+    v.trim(),
+    v.nonEmpty('Informe seu número de matrícula.'),
+    v.regex(/^\d{5,20}$/, 'Informe uma matrícula contendo apenas números.'),
+  ),
+  email: v.pipe(
+    v.string(),
+    v.trim(),
+    v.nonEmpty('Informe seu e-mail.'),
+    v.maxLength(254, 'O e-mail deve ter no máximo 254 caracteres.'),
+    v.email('Informe um e-mail válido.'),
+  ),
   url: v.pipe(
     v.string(),
     v.trim(),
@@ -54,7 +76,13 @@ export function AddLinkInlineForm({
   } = useForm<AddLinkFormData>({
     resolver: valibotResolver(addLinkSchema),
     mode: 'onChange',
-    defaultValues: { url: '', contactReference: '' },
+    defaultValues: {
+      nome: '',
+      matricula: '',
+      email: '',
+      url: '',
+      contactReference: '',
+    },
   })
 
   function onSubmit(data: AddLinkFormData) {
@@ -62,6 +90,9 @@ export function AddLinkInlineForm({
       const result = await adicionarLink(
         turmaId,
         data.url,
+        data.nome,
+        data.matricula,
+        data.email,
         data.contactReference ?? '',
       )
 
@@ -109,6 +140,64 @@ export function AddLinkInlineForm({
         />
       </div>
 
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <div className="space-y-2">
+          <label htmlFor={`submitter-name-${turmaId}`} className="text-xs font-medium">
+            Nome completo
+          </label>
+          <Input
+            id={`submitter-name-${turmaId}`}
+            type="text"
+            autoComplete="name"
+            maxLength={100}
+            aria-invalid={Boolean(errors.nome)}
+            {...register('nome')}
+          />
+          {errors.nome?.message && (
+            <p className="text-xs text-destructive">{errors.nome.message}</p>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <label
+            htmlFor={`submitter-registration-${turmaId}`}
+            className="text-xs font-medium"
+          >
+            Matrícula UFBA
+          </label>
+          <Input
+            id={`submitter-registration-${turmaId}`}
+            type="text"
+            inputMode="numeric"
+            autoComplete="off"
+            maxLength={20}
+            aria-invalid={Boolean(errors.matricula)}
+            {...register('matricula')}
+          />
+          {errors.matricula?.message && (
+            <p className="text-xs text-destructive">{errors.matricula.message}</p>
+          )}
+        </div>
+      </div>
+
+      <div className="mt-3 space-y-2">
+        <label htmlFor={`submitter-email-${turmaId}`} className="text-xs font-medium">
+          E-mail
+        </label>
+        <Input
+          id={`submitter-email-${turmaId}`}
+          type="email"
+          inputMode="email"
+          autoComplete="email"
+          maxLength={254}
+          aria-invalid={Boolean(errors.email)}
+          {...register('email')}
+        />
+        {errors.email?.message && (
+          <p className="text-xs text-destructive">{errors.email.message}</p>
+        )}
+      </div>
+
       <div className="mt-3 space-y-2">
         <label htmlFor={`whatsapp-url-${turmaId}`} className="text-xs font-medium">
           Link de convite do WhatsApp
@@ -129,6 +218,15 @@ export function AddLinkInlineForm({
           <p className="text-xs text-destructive">{errors.root.message}</p>
         )}
       </div>
+
+      <p className="mt-3 text-xs leading-5 text-muted-foreground">
+        Nome, matrícula e e-mail são armazenados de forma privada para moderação
+        e contato administrativo. Eles não aparecem na página da turma.{' '}
+        <Link href="/privacidade" className="underline underline-offset-2 hover:text-foreground">
+          Saiba como os dados são tratados
+        </Link>
+        .
+      </p>
 
       <div className="mt-3 flex justify-end">
         <Button type="submit" disabled={!isValid || isPending}>

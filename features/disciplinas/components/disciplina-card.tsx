@@ -137,7 +137,7 @@ export function DisciplinaCard({ disciplina }: DisciplinaCardProps) {
             </p>
           )}
 
-          <p className="rounded-xl bg-muted/50 p-3 text-sm text-muted-foreground">
+          <p className="rounded-xl bg-muted/50 p-3 text-sm text-muted-foreground mb-3.5 mt-3.5">
             Não existe grupo? Crie um no seu WhatsApp e cole o link de convite
             aqui.
           </p>
