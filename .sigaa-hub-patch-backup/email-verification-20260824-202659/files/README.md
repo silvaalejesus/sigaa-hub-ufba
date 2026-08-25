@@ -59,17 +59,3 @@ A Fase 3 permanece não iniciada.
 - o workflow `ci.yml` valida lint, tipos, testes e build.
 
 Veja `docs/LAUNCH_CHECKLIST.md` antes do deploy.
-
-<!-- email-verification-turnstile-resend-2026-08-19 -->
-## Verificação de e-mail antes de publicar grupos
-
-O cadastro de um grupo passa por Cloudflare Turnstile e por confirmação do
-endereço via Resend. A RPC final `add_link_secure` fica executável apenas pelo
-backend privilegiado, evitando que um cliente anônimo contorne a confirmação
-pela Data API.
-
-O arquivo `public/__forms.html` continua atendendo os formulários Netlify já
-existentes (`sigaa-hub-feedback` e `sigaa-hub-link-added`) e não é alterado por
-este patch.
-
-Veja `docs/EMAIL_VERIFICATION.md` para configuração e deploy.

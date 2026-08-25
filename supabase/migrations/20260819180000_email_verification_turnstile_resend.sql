@@ -1,0 +1,376 @@
+-- SIGAA Hub UFBA
+-- Confirmação de e-mail + proteção antiabuso para submissão de links.
+--
+-- O fluxo passa a ser:
+-- Turnstile -> rate limit de solicitação -> e-mail Resend -> confirmação ->
+-- add_link_secure via chave secreta do backend.
+--
+-- Não cria tabela temporária/pending e não adiciona rotina de limpeza.
+-- O token de confirmação é criptografado e expira no próprio payload.
+
+begin;
+
+alter table private.link_submissions
+  add column if not exists email_verified_at timestamptz;
+
+comment on column private.link_submissions.identity_verified is
+  'Neste fluxo, true significa apenas que o e-mail foi confirmado. Não comprova nome ou matrícula.';
+
+comment on column private.link_submissions.email_verified_at is
+  'Momento em que o endereço de e-mail foi confirmado antes da publicação do link.';
+
+create or replace function public.request_link_email_verification_secure(
+  p_turma_id uuid,
+  p_url_whatsapp text,
+  p_reporter_fingerprint text,
+  p_email_fingerprint text
+)
+returns text
+language plpgsql
+security definer
+set search_path = ''
+as $function$
+declare
+  v_url text;
+  v_reporter_fingerprint text;
+  v_email_fingerprint text;
+  v_reporter_attempts integer;
+  v_email_attempts integer;
+begin
+  if p_turma_id is null then
+    return 'not_found';
+  end if;
+
+  v_url := btrim(coalesce(p_url_whatsapp, ''));
+  if v_url !~ '^https://chat\.whatsapp\.com/[A-Za-z0-9_-]+/?$' then
+    raise exception 'Invalid WhatsApp invite URL.' using errcode = '22023';
+  end if;
+
+  v_reporter_fingerprint := lower(
+    btrim(coalesce(p_reporter_fingerprint, ''))
+  );
+  if v_reporter_fingerprint !~ '^[0-9a-f]{64}$' then
+    raise exception 'Invalid reporter fingerprint.' using errcode = '22023';
+  end if;
+
+  v_email_fingerprint := lower(
+    btrim(coalesce(p_email_fingerprint, ''))
+  );
+  if v_email_fingerprint !~ '^[0-9a-f]{64}$' then
+    raise exception 'Invalid email fingerprint.' using errcode = '22023';
+  end if;
+
+  -- Serializa por visitante e por e-mail derivado para reduzir corrida de rate limit.
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(
+      'link_verify_reporter:' || v_reporter_fingerprint,
+      0
+    )
+  );
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(
+      'link_verify_email:' || v_email_fingerprint,
+      0
+    )
+  );
+
+  insert into public.abuse_events (
+    action_scope,
+    reporter_fingerprint,
+    resource_id,
+    outcome
+  ) values (
+    'link_verify_request',
+    v_reporter_fingerprint,
+    p_turma_id,
+    'attempted'
+  );
+
+  select count(*)::integer
+  into v_reporter_attempts
+  from public.abuse_events
+  where action_scope = 'link_verify_request'
+    and reporter_fingerprint = v_reporter_fingerprint
+    and created_at >= now() - interval '1 hour';
+
+  if v_reporter_attempts > 5 then
+    return 'rate_limited';
+  end if;
+
+  insert into public.abuse_events (
+    action_scope,
+    reporter_fingerprint,
+    resource_id,
+    outcome
+  ) values (
+    'link_verify_email_request',
+    v_email_fingerprint,
+    p_turma_id,
+    'attempted'
+  );
+
+  select count(*)::integer
+  into v_email_attempts
+  from public.abuse_events
+  where action_scope = 'link_verify_email_request'
+    and reporter_fingerprint = v_email_fingerprint
+    and created_at >= now() - interval '1 hour';
+
+  if v_email_attempts > 3 then
+    return 'rate_limited';
+  end if;
+
+  if not exists (
+    select 1
+    from public.turmas
+    where id = p_turma_id
+  ) then
+    return 'not_found';
+  end if;
+
+  if exists (
+    select 1
+    from public.links
+    where turma_id = p_turma_id
+      and is_active is true
+  ) then
+    return 'active_link_exists';
+  end if;
+
+  if exists (
+    select 1
+    from public.links
+    where turma_id = p_turma_id
+      and url_whatsapp = v_url
+  ) then
+    return 'url_already_registered';
+  end if;
+
+  if pg_catalog.random() < 0.02 then
+    perform public.cleanup_expired_abuse_events(interval '30 days', 250);
+  end if;
+
+  return 'verification_allowed';
+end;
+$function$;
+
+comment on function public.request_link_email_verification_secure(
+  uuid, text, text, text
+) is
+  'Aplica rate limit e valida pré-condições antes do backend enviar o e-mail de confirmação. Não armazena PII.';
+
+revoke all on function public.request_link_email_verification_secure(
+  uuid, text, text, text
+) from public, anon, authenticated;
+
+grant execute on function public.request_link_email_verification_secure(
+  uuid, text, text, text
+) to service_role;
+
+-- add_link_secure passa a representar a etapa FINAL, após confirmação do e-mail.
+-- Por isso deixa de ser executável com anon/authenticated e registra a confirmação.
+create or replace function public.add_link_secure(
+  p_turma_id uuid,
+  p_url_whatsapp text,
+  p_reporter_fingerprint text,
+  p_submitter_name text,
+  p_submitter_registration text,
+  p_submitter_email text
+)
+returns text
+language plpgsql
+security definer
+set search_path = ''
+as $function$
+declare
+  v_url text;
+  v_fingerprint text;
+  v_name text;
+  v_registration text;
+  v_email text;
+  v_attempts_last_hour integer;
+  v_successes_last_day integer;
+  v_constraint_name text;
+  v_link_id uuid;
+begin
+  if p_turma_id is null then
+    return 'not_found';
+  end if;
+
+  v_url := btrim(coalesce(p_url_whatsapp, ''));
+  if v_url !~ '^https://chat\.whatsapp\.com/[A-Za-z0-9_-]+/?$' then
+    raise exception 'Invalid WhatsApp invite URL.' using errcode = '22023';
+  end if;
+
+  v_fingerprint := lower(btrim(coalesce(p_reporter_fingerprint, '')));
+  if v_fingerprint !~ '^[0-9a-f]{64}$' then
+    raise exception 'Invalid reporter fingerprint.' using errcode = '22023';
+  end if;
+
+  v_name := btrim(coalesce(p_submitter_name, ''));
+  if char_length(v_name) < 3 or char_length(v_name) > 100 then
+    raise exception 'Invalid submitter name.' using errcode = '22023';
+  end if;
+
+  v_registration := btrim(coalesce(p_submitter_registration, ''));
+  if v_registration !~ '^[0-9]{5,20}$' then
+    raise exception 'Invalid submitter registration.' using errcode = '22023';
+  end if;
+
+  v_email := lower(btrim(coalesce(p_submitter_email, '')));
+  if char_length(v_email) > 254
+     or v_email !~* '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$' then
+    raise exception 'Invalid submitter email.' using errcode = '22023';
+  end if;
+
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended('add_link:' || v_fingerprint, 0)
+  );
+
+  insert into public.abuse_events (
+    action_scope,
+    reporter_fingerprint,
+    resource_id,
+    outcome
+  ) values (
+    'add_link_attempt',
+    v_fingerprint,
+    p_turma_id,
+    'attempted'
+  );
+
+  select count(*)::integer
+  into v_attempts_last_hour
+  from public.abuse_events
+  where action_scope = 'add_link_attempt'
+    and reporter_fingerprint = v_fingerprint
+    and created_at >= now() - interval '1 hour';
+
+  if v_attempts_last_hour > 5 then
+    return 'rate_limited';
+  end if;
+
+  select count(*)::integer
+  into v_successes_last_day
+  from public.abuse_events
+  where action_scope = 'add_link_success'
+    and reporter_fingerprint = v_fingerprint
+    and created_at >= now() - interval '24 hours';
+
+  if v_successes_last_day >= 2 then
+    return 'rate_limited';
+  end if;
+
+  if not exists (
+    select 1
+    from public.turmas
+    where id = p_turma_id
+  ) then
+    return 'not_found';
+  end if;
+
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended('add_link_turma:' || p_turma_id::text, 0)
+  );
+
+  if exists (
+    select 1
+    from public.links
+    where turma_id = p_turma_id
+      and is_active is true
+  ) then
+    return 'active_link_exists';
+  end if;
+
+  if exists (
+    select 1
+    from public.links
+    where turma_id = p_turma_id
+      and url_whatsapp = v_url
+  ) then
+    return 'url_already_registered';
+  end if;
+
+  begin
+    insert into public.links (
+      turma_id,
+      url_whatsapp,
+      reports,
+      is_active,
+      inactive_reason
+    ) values (
+      p_turma_id,
+      v_url,
+      0,
+      true,
+      null
+    )
+    returning id into v_link_id;
+  exception
+    when unique_violation then
+      get stacked diagnostics v_constraint_name = constraint_name;
+
+      if v_constraint_name = 'one_active_link_per_class' then
+        return 'active_link_exists';
+      end if;
+
+      if v_constraint_name in (
+        'idx_links_unique_turma_url',
+        'links_turma_id_url_whatsapp_key'
+      ) then
+        return 'url_already_registered';
+      end if;
+
+      raise;
+  end;
+
+  insert into private.link_submissions (
+    link_id,
+    submitter_name,
+    submitter_registration,
+    submitter_email,
+    identity_verified,
+    email_verified_at
+  ) values (
+    v_link_id,
+    v_name,
+    v_registration,
+    v_email,
+    true,
+    now()
+  );
+
+  insert into public.abuse_events (
+    action_scope,
+    reporter_fingerprint,
+    resource_id,
+    outcome
+  ) values (
+    'add_link_success',
+    v_fingerprint,
+    p_turma_id,
+    'accepted'
+  );
+
+  if pg_catalog.random() < 0.02 then
+    perform public.cleanup_expired_abuse_events(interval '30 days', 250);
+  end if;
+
+  return 'added';
+end;
+$function$;
+
+comment on function public.add_link_secure(
+  uuid, text, text, text, text, text
+) is
+  'Publica o convite após confirmação de e-mail. Executável somente pelo backend privilegiado.';
+
+revoke all on function public.add_link_secure(
+  uuid, text, text, text, text, text
+) from public, anon, authenticated;
+
+grant execute on function public.add_link_secure(
+  uuid, text, text, text, text, text
+) to service_role;
+
+commit;

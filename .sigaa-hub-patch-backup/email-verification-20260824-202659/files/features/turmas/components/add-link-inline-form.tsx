@@ -3,12 +3,12 @@
 import { valibotResolver } from '@hookform/resolvers/valibot'
 import { Loader2, PlusCircle, X } from 'lucide-react'
 import Link from 'next/link'
-import { useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
+import { useTransition } from 'react'
 import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
 import * as v from 'valibot'
 
-import { TurnstileWidget } from '@/components/security/turnstile-widget'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { adicionarLink } from '@/features/turmas/actions'
@@ -65,10 +65,8 @@ export function AddLinkInlineForm({
   onCancel,
   onSuccess,
 }: AddLinkInlineFormProps) {
+  const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  const [turnstileToken, setTurnstileToken] = useState('')
-  const [turnstileResetNonce, setTurnstileResetNonce] = useState(0)
-
   const {
     register,
     handleSubmit,
@@ -87,20 +85,7 @@ export function AddLinkInlineForm({
     },
   })
 
-  function resetTurnstile() {
-    setTurnstileToken('')
-    setTurnstileResetNonce((value) => value + 1)
-  }
-
   function onSubmit(data: AddLinkFormData) {
-    if (!turnstileToken) {
-      setError('root', {
-        type: 'server',
-        message: 'Conclua a verificação antirobô.',
-      })
-      return
-    }
-
     startTransition(async () => {
       const result = await adicionarLink(
         turmaId,
@@ -108,11 +93,8 @@ export function AddLinkInlineForm({
         data.nome,
         data.matricula,
         data.email,
-        turnstileToken,
         data.contactReference ?? '',
       )
-
-      resetTurnstile()
 
       if (!result.ok) {
         setError('root', { type: 'server', message: result.message })
@@ -123,6 +105,7 @@ export function AddLinkInlineForm({
       toast.success(result.message)
       reset()
       onSuccess()
+      router.refresh()
     })
   }
 
@@ -133,24 +116,18 @@ export function AddLinkInlineForm({
     >
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-sm font-medium">
-            Adicionar link da turma {codigoTurma}
-          </p>
+          <p className="text-sm font-medium">Adicionar link da turma {codigoTurma}</p>
           <p className="mt-1 text-xs text-muted-foreground">
             Cole um link público iniciado por https://chat.whatsapp.com/.
           </p>
         </div>
-
         <Button type="button" variant="ghost" size="icon-sm" onClick={onCancel}>
           <X className="size-4" />
           <span className="sr-only">Cancelar cadastro</span>
         </Button>
       </div>
 
-      <div
-        aria-hidden="true"
-        className="absolute -left-[10000px] h-px w-px overflow-hidden"
-      >
+      <div aria-hidden="true" className="absolute -left-[10000px] h-px w-px overflow-hidden">
         <label htmlFor={`contact-reference-add-${turmaId}`}>
           Não preencha este campo
         </label>
@@ -165,10 +142,7 @@ export function AddLinkInlineForm({
 
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
         <div className="space-y-2">
-          <label
-            htmlFor={`submitter-name-${turmaId}`}
-            className="text-xs font-medium"
-          >
+          <label htmlFor={`submitter-name-${turmaId}`} className="text-xs font-medium">
             Nome completo
           </label>
           <Input
@@ -201,18 +175,13 @@ export function AddLinkInlineForm({
             {...register('matricula')}
           />
           {errors.matricula?.message && (
-            <p className="text-xs text-destructive">
-              {errors.matricula.message}
-            </p>
+            <p className="text-xs text-destructive">{errors.matricula.message}</p>
           )}
         </div>
       </div>
 
       <div className="mt-3 space-y-2">
-        <label
-          htmlFor={`submitter-email-${turmaId}`}
-          className="text-xs font-medium"
-        >
+        <label htmlFor={`submitter-email-${turmaId}`} className="text-xs font-medium">
           E-mail
         </label>
         <Input
@@ -230,10 +199,7 @@ export function AddLinkInlineForm({
       </div>
 
       <div className="mt-3 space-y-2">
-        <label
-          htmlFor={`whatsapp-url-${turmaId}`}
-          className="text-xs font-medium"
-        >
+        <label htmlFor={`whatsapp-url-${turmaId}`} className="text-xs font-medium">
           Link de convite do WhatsApp
         </label>
         <Input
@@ -248,43 +214,28 @@ export function AddLinkInlineForm({
         {errors.url?.message && (
           <p className="text-xs text-destructive">{errors.url.message}</p>
         )}
+        {errors.root?.message && (
+          <p className="text-xs text-destructive">{errors.root.message}</p>
+        )}
       </div>
 
       <p className="mt-3 text-xs leading-5 text-muted-foreground">
         Nome, matrícula e e-mail são armazenados de forma privada para moderação
-        e contato administrativo. O grupo só será publicado depois que você
-        confirmar o e-mail informado.{' '}
-        <Link
-          href="/privacidade"
-          className="underline underline-offset-2 hover:text-foreground"
-        >
+        e contato administrativo. Eles não aparecem na página da turma.{' '}
+        <Link href="/privacidade" className="underline underline-offset-2 hover:text-foreground">
           Saiba como os dados são tratados
         </Link>
         .
       </p>
 
-      <div className="mt-4">
-        <TurnstileWidget
-          onTokenChange={setTurnstileToken}
-          resetNonce={turnstileResetNonce}
-        />
-      </div>
-
-      {errors.root?.message && (
-        <p className="mt-3 text-xs text-destructive">{errors.root.message}</p>
-      )}
-
       <div className="mt-3 flex justify-end">
-        <Button
-          type="submit"
-          disabled={!isValid || isPending || !turnstileToken}
-        >
+        <Button type="submit" disabled={!isValid || isPending}>
           {isPending ? (
             <Loader2 className="size-4 animate-spin" />
           ) : (
             <PlusCircle className="size-4" />
           )}
-          Enviar confirmação
+          Salvar link
         </Button>
       </div>
     </form>

@@ -11,11 +11,7 @@ function safeOrigin(rawValue) {
 export function buildContentSecurityPolicyReportOnly(
   environment = process.env,
 ) {
-  const scriptOrigins = new Set([
-    "'self'",
-    "'unsafe-inline'",
-    "https://challenges.cloudflare.com",
-  ]);
+  const scriptOrigins = new Set(["'self'", "'unsafe-inline'"]);
   const connectOrigins = new Set([
     "'self'",
     "https://ingesteer.services-prod.nsvcs.net",
@@ -61,7 +57,6 @@ export function buildContentSecurityPolicyReportOnly(
     `script-src ${[...scriptOrigins].join(" ")}`,
     `connect-src ${[...connectOrigins].join(" ")}`,
     "worker-src 'self' blob:",
-    "frame-src https://challenges.cloudflare.com",
     "manifest-src 'self'",
   ].join("; ");
 }

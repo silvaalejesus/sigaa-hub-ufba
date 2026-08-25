@@ -43,19 +43,3 @@ test('ativa CSP efetiva somente quando SECURITY_CSP_MODE=enforce', () => {
   assert.ok(headers.has('Content-Security-Policy'))
   assert.equal(headers.has('Content-Security-Policy-Report-Only'), false)
 })
-
-test('CSP permite somente a origem necessária do Turnstile', () => {
-  const csp = buildContentSecurityPolicyReportOnly({
-    NEXT_PUBLIC_SUPABASE_URL: 'https://example.supabase.co',
-  })
-
-  assert.match(
-    csp,
-    /script-src[^;]*https:\/\/challenges\.cloudflare\.com/,
-  )
-  assert.match(
-    csp,
-    /frame-src https:\/\/challenges\.cloudflare\.com/,
-  )
-})
-

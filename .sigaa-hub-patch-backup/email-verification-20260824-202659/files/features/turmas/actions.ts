@@ -19,14 +19,7 @@ import {
 } from "@/features/turmas/constants";
 import { captureUnexpectedError } from "@/lib/observability/capture-unexpected-error";
 import { getIdSuffix, writeSafeLog } from "@/lib/observability/safe-logger";
-import { sendLinkVerificationEmail } from "@/lib/email/resend";
-import {
-  buildLinkEmailVerificationUrl,
-  createLinkEmailVerificationToken,
-  createVerificationEmailFingerprint,
-} from "@/lib/security/link-email-verification";
-import { validateTurnstileToken } from "@/lib/security/turnstile";
-import { createPrivilegedSupabaseClient } from "@/lib/supabase/privileged-server";
+import { notifyLinkAdded } from "@/lib/notifications/netlify-link-notification";
 import { createAbuseFingerprint } from "@/lib/security/abuse-fingerprint";
 import { createClient } from "@/lib/supabase/server";
 
@@ -69,12 +62,6 @@ const adicionarLinkSchema = v.object({
       WHATSAPP_INVITE_REGEX,
       "O link deve começar com https://chat.whatsapp.com/",
     ),
-  ),
-  turnstileToken: v.pipe(
-    v.string(),
-    v.trim(),
-    v.nonEmpty("Conclua a verificação antirobô."),
-    v.maxLength(2048, "Verificação antirobô inválida."),
   ),
   contactReference: honeypotSchema,
 });
@@ -142,7 +129,6 @@ export async function adicionarLink(
   nome: string,
   matricula: string,
   email: string,
-  turnstileToken: string,
   contactReference = "",
 ): Promise<AddLinkActionResult> {
   const parsed = v.safeParse(adicionarLinkSchema, {
@@ -151,7 +137,6 @@ export async function adicionarLink(
     nome,
     matricula,
     email,
-    turnstileToken,
     contactReference,
   });
 
@@ -160,32 +145,6 @@ export async function adicionarLink(
   }
 
   if (parsed.output.contactReference.trim()) return honeypotFailure();
-
-  const turnstile = await validateTurnstileToken(
-    parsed.output.turnstileToken,
-    "add_link",
-  );
-
-  if (!turnstile.ok) {
-    writeSafeLog("warn", {
-      event: "turnstile_validation_failed",
-      code: turnstile.code,
-      resourceIdSuffix: getIdSuffix(parsed.output.turmaId),
-      environment: process.env.CONTEXT ?? process.env.NODE_ENV,
-    });
-
-    if (turnstile.code === "CONFIGURATION_ERROR") {
-      return {
-        ok: false,
-        code: "CONFIGURATION_ERROR",
-        message: "A verificação antirobô não está disponível agora.",
-      };
-    }
-
-    return validationFailure(
-      "Não foi possível validar a verificação antirobô. Tente novamente.",
-    );
-  }
 
   const fingerprint = await getFingerprint("add_link");
   if (!fingerprint) {
@@ -197,90 +156,70 @@ export async function adicionarLink(
   }
 
   try {
-    const emailFingerprint = createVerificationEmailFingerprint(
-      parsed.output.email,
-    );
-    const privilegedSupabase = createPrivilegedSupabaseClient();
-
-    const { data, error } = await privilegedSupabase.rpc(
-      "request_link_email_verification_secure",
-      {
-        p_turma_id: parsed.output.turmaId,
-        p_url_whatsapp: parsed.output.url,
-        p_reporter_fingerprint: fingerprint,
-        p_email_fingerprint: emailFingerprint,
-      },
-    );
+    const supabase = await createClient();
+    const { data, error } = await supabase.rpc("add_link_secure", {
+      p_turma_id: parsed.output.turmaId,
+      p_url_whatsapp: parsed.output.url,
+      p_reporter_fingerprint: fingerprint,
+      p_submitter_name: parsed.output.nome,
+      p_submitter_registration: parsed.output.matricula,
+      p_submitter_email: parsed.output.email,
+    } as any);
 
     if (error) {
+      if (error.code !== "22023") {
+        captureUnexpectedError(error, {
+          operation: "adicionarLink.rpc",
+          subsystem: "supabase",
+          tags: { database_error_code: error.code || "unknown" },
+        });
+      }
       writeSafeLog("error", {
-        event: "link_verification_request_failed",
+        event: "add_link_failed",
         code: error.code || "DATABASE_ERROR",
         resourceIdSuffix: getIdSuffix(parsed.output.turmaId),
         environment: process.env.CONTEXT ?? process.env.NODE_ENV,
       });
       return databaseFailure(
-        "Não foi possível preparar a confirmação do e-mail. Tente novamente.",
+        "Não foi possível adicionar o link. Tente novamente.",
       );
     }
 
-    const rpcStatus = typeof data === "string" ? data : String(data ?? "");
+    const result = mapAddRpcResult(data);
+    if (result.ok) {
+      revalidatePath("/");
 
-    if (rpcStatus !== "verification_allowed") {
-      return mapAddRpcResult(rpcStatus);
-    }
-
-    const verificationToken = createLinkEmailVerificationToken({
-      turmaId: parsed.output.turmaId,
-      url: parsed.output.url,
-      nome: parsed.output.nome,
-      matricula: parsed.output.matricula,
-      email: parsed.output.email,
-      fingerprint,
-    });
-
-    const verificationUrl = buildLinkEmailVerificationUrl(verificationToken);
-
-    const emailResult = await sendLinkVerificationEmail({
-      to: parsed.output.email,
-      name: parsed.output.nome,
-      verificationUrl,
-    });
-
-    if (!emailResult.ok) {
-      writeSafeLog("warn", {
-        event: "link_verification_email_failed",
-        code: emailResult.code,
-        resourceIdSuffix: getIdSuffix(parsed.output.turmaId),
-        environment: process.env.CONTEXT ?? process.env.NODE_ENV,
+      const notification = await notifyLinkAdded({
+        turmaId: parsed.output.turmaId,
+        whatsappUrl: parsed.output.url,
+        submitterName: parsed.output.nome,
+        submitterRegistration: parsed.output.matricula,
+        submitterEmail: parsed.output.email,
       });
 
-      return databaseFailure(
-        "Não foi possível enviar o e-mail de confirmação. Tente novamente.",
-      );
+      if (!notification.ok) {
+        writeSafeLog("warn", {
+          event: "link_notification_failed",
+          code: notification.code,
+          resourceIdSuffix: getIdSuffix(parsed.output.turmaId),
+          environment: process.env.CONTEXT ?? process.env.NODE_ENV,
+        });
+      }
     }
-
-    const successResult = mapAddRpcResult("added");
-    if (!successResult.ok) {
-      return databaseFailure(
-        "O e-mail foi enviado, mas não foi possível concluir a resposta.",
-      );
-    }
-
-    return {
-      ...successResult,
-      message:
-        "Enviamos um e-mail de confirmação. O grupo só será publicado após a confirmação.",
-    };
-  } catch {
+    return result;
+  } catch (error) {
+    captureUnexpectedError(error, {
+      operation: "adicionarLink",
+      subsystem: "server-action",
+    });
     writeSafeLog("error", {
-      event: "link_verification_request_failed",
+      event: "add_link_failed",
       code: "UNEXPECTED_ERROR",
       resourceIdSuffix: getIdSuffix(parsed.output.turmaId),
       environment: process.env.CONTEXT ?? process.env.NODE_ENV,
     });
     return databaseFailure(
-      "Não foi possível enviar o e-mail de confirmação. Tente novamente.",
+      "Não foi possível adicionar o link. Tente novamente.",
     );
   }
 }

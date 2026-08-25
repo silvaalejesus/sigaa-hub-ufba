@@ -23,7 +23,7 @@ export default function PrivacyPage() {
               Política de privacidade
             </h1>
             <p className="mt-3 text-sm leading-6 text-muted-foreground">
-              Última atualização: 19 de agosto de 2026.
+              Última atualização: 18 de agosto de 2026.
             </p>
           </header>
 
@@ -55,8 +55,6 @@ export default function PrivacyPage() {
               controles antiabuso. O identificador persistido pelo mecanismo de
               rate limit é derivado por HMAC no servidor; o projeto não precisa
               armazenar o endereço IP bruto como identificador de moderação.
-              O formulário de novo grupo também utiliza Cloudflare Turnstile e
-              confirmação do endereço de e-mail antes da publicação.
             </p>
           </section> */}
 
@@ -76,9 +74,7 @@ export default function PrivacyPage() {
             <p className="mt-2 leading-7 text-muted-foreground">
               O projeto utiliza serviços de infraestrutura e observabilidade,
               incluindo Supabase para banco de dados, Netlify para hospedagem e
-              formulários, Sentry para observabilidade, Google Analytics 4,
-              Cloudflare Turnstile para proteção antirobô e Resend para envio
-              dos e-mails de confirmação. Cada serviço pode processar os dados
+              formulários, Sentry para observabilidade e Google Analytics 4. Cada serviço pode processar os dados
               estritamente necessários à função que executa.
             </p>
           </section> */}
