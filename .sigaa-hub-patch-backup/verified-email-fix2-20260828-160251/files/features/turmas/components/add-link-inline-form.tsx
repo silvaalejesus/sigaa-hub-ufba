@@ -252,8 +252,8 @@ export function AddLinkInlineForm({
 
       <p className="mt-3 text-xs leading-5 text-muted-foreground">
         Nome, matrícula e e-mail são armazenados de forma privada para moderação
-        e contato administrativo. Se este e-mail ainda não tiver sido confirmado
-        neste navegador, enviaremos uma confirmação antes de publicar o grupo.{' '}
+        e contato administrativo. O grupo só será publicado depois que você
+        confirmar o e-mail informado.{' '}
         <Link
           href="/privacidade"
           className="underline underline-offset-2 hover:text-foreground"

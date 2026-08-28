@@ -20,9 +20,9 @@ const messages: Record<string, { title: string; description: string }> = {
       "O grupo foi publicado com sucesso. Obrigado por contribuir com o SIGAA Hub UFBA.",
   },
   already_exists: {
-    title: "Esta solicitação já foi concluída",
+    title: "A turma já possui um grupo",
     description:
-      "O link deste e-mail já foi usado ou a turma indicada nesta solicitação já possui um grupo ativo. Se você estava adicionando outra turma, abra o e-mail de confirmação mais recente e confira o código da solicitação no assunto.",
+      "Enquanto você confirmava o e-mail, um grupo ativo já foi cadastrado para essa turma.",
   },
   expired: {
     title: "Link expirado",

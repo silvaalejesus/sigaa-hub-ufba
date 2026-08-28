@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { cookies, headers } from "next/headers";
+import { headers } from "next/headers";
 import * as v from "valibot";
 
 import {
@@ -20,16 +20,11 @@ import {
 import { captureUnexpectedError } from "@/lib/observability/capture-unexpected-error";
 import { getIdSuffix, writeSafeLog } from "@/lib/observability/safe-logger";
 import { sendLinkVerificationEmail } from "@/lib/email/resend";
-import { notifyLinkAdded } from "@/lib/notifications/netlify-link-notification";
 import {
   buildLinkEmailVerificationUrl,
   createLinkEmailVerificationToken,
   createVerificationEmailFingerprint,
 } from "@/lib/security/link-email-verification";
-import {
-  isVerifiedEmailCookieValid,
-  VERIFIED_EMAIL_COOKIE_NAME,
-} from "@/lib/security/verified-email-cookie";
 import { validateTurnstileToken } from "@/lib/security/turnstile";
 import { createPrivilegedSupabaseClient } from "@/lib/supabase/privileged-server";
 import { createAbuseFingerprint } from "@/lib/security/abuse-fingerprint";
@@ -202,74 +197,10 @@ export async function adicionarLink(
   }
 
   try {
-    const privilegedSupabase = createPrivilegedSupabaseClient();
-    const cookieStore = await cookies();
-    const verifiedEmailCookie = cookieStore.get(
-      VERIFIED_EMAIL_COOKIE_NAME,
-    )?.value;
-
-    if (
-      isVerifiedEmailCookieValid(
-        verifiedEmailCookie,
-        parsed.output.email,
-      )
-    ) {
-      const { data, error } = await privilegedSupabase.rpc(
-        "add_link_secure",
-        {
-          p_turma_id: parsed.output.turmaId,
-          p_url_whatsapp: parsed.output.url,
-          p_reporter_fingerprint: fingerprint,
-          p_submitter_name: parsed.output.nome,
-          p_submitter_registration: parsed.output.matricula,
-          p_submitter_email: parsed.output.email,
-        },
-      );
-
-      if (error) {
-        writeSafeLog("error", {
-          event: "verified_email_session_reused",
-          code: error.code || "DATABASE_ERROR",
-          resourceIdSuffix: getIdSuffix(parsed.output.turmaId),
-          environment: process.env.CONTEXT ?? process.env.NODE_ENV,
-        });
-        return databaseFailure(
-          "Não foi possível adicionar o link. Tente novamente.",
-        );
-      }
-
-      const result = mapAddRpcResult(data);
-      if (!result.ok) return result;
-
-      revalidatePath("/");
-
-      const notification = await notifyLinkAdded({
-        turmaId: parsed.output.turmaId,
-        whatsappUrl: parsed.output.url,
-        submitterName: parsed.output.nome,
-        submitterRegistration: parsed.output.matricula,
-        submitterEmail: parsed.output.email,
-      });
-
-      if (!notification.ok) {
-        writeSafeLog("warn", {
-          event: "link_notification_failed",
-          code: notification.code,
-          resourceIdSuffix: getIdSuffix(parsed.output.turmaId),
-          environment: process.env.CONTEXT ?? process.env.NODE_ENV,
-        });
-      }
-
-      return {
-        ...result,
-        message:
-          "Grupo publicado com sucesso. Este e-mail já estava confirmado neste navegador.",
-      };
-    }
-
     const emailFingerprint = createVerificationEmailFingerprint(
       parsed.output.email,
     );
+    const privilegedSupabase = createPrivilegedSupabaseClient();
 
     const { data, error } = await privilegedSupabase.rpc(
       "request_link_email_verification_secure",
@@ -353,6 +284,7 @@ export async function adicionarLink(
     );
   }
 }
+
 export async function denunciarLink(
   linkId: string,
   motivo: string,

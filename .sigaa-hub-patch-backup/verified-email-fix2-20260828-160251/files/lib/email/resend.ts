@@ -40,11 +40,10 @@ export async function sendLinkVerificationEmail(
 
   const safeName = escapeHtml(input.name);
   const safeUrl = escapeHtml(input.verificationUrl);
-  const verificationHash = createHash("sha256")
+  const idempotencyKey = `link-verify-${createHash("sha256")
     .update(input.verificationUrl)
-    .digest("hex");
-  const requestReference = verificationHash.slice(0, 8).toUpperCase();
-  const idempotencyKey = `link-verify-${verificationHash.slice(0, 48)}`;
+    .digest("hex")
+    .slice(0, 48)}`;
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 8_000);
@@ -60,12 +59,11 @@ export async function sendLinkVerificationEmail(
       body: JSON.stringify({
         from,
         to: [input.to],
-        subject: `Confirme seu grupo no SIGAA Hub · ${requestReference}`,
+        subject: "Confirme o grupo enviado ao SIGAA Hub UFBA",
         text: [
           `Olá, ${input.name}.`,
           "",
           "Recebemos uma solicitação para adicionar um grupo ao SIGAA Hub UFBA.",
-          `Solicitação: ${requestReference}`,
           "Confirme seu e-mail para publicar o grupo:",
           input.verificationUrl,
           "",
@@ -79,9 +77,6 @@ export async function sendLinkVerificationEmail(
             <p>
               Recebemos uma solicitação para adicionar um grupo ao
               <strong>SIGAA Hub UFBA</strong>.
-            </p>
-            <p>
-              <strong>Solicitação:</strong> ${requestReference}
             </p>
             <p>
               <a

@@ -4,39 +4,12 @@ import { NextResponse } from "next/server";
 import { notifyLinkAdded } from "@/lib/notifications/netlify-link-notification";
 import { getIdSuffix, writeSafeLog } from "@/lib/observability/safe-logger";
 import { parseLinkEmailVerificationToken } from "@/lib/security/link-email-verification";
-import {
-  createVerifiedEmailCookieValue,
-  VERIFIED_EMAIL_COOKIE_MAX_AGE_SECONDS,
-  VERIFIED_EMAIL_COOKIE_NAME,
-} from "@/lib/security/verified-email-cookie";
 import { createPrivilegedSupabaseClient } from "@/lib/supabase/privileged-server";
 
 function redirectWithStatus(request: Request, status: string) {
   const url = new URL("/verificar-email/resultado", request.url);
   url.searchParams.set("status", status);
   return NextResponse.redirect(url, 303);
-}
-
-function redirectWithVerifiedEmail(
-  request: Request,
-  status: string,
-  email: string,
-) {
-  const response = redirectWithStatus(request, status);
-
-  response.cookies.set(
-    VERIFIED_EMAIL_COOKIE_NAME,
-    createVerifiedEmailCookieValue(email),
-    {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-      maxAge: VERIFIED_EMAIL_COOKIE_MAX_AGE_SECONDS,
-    },
-  );
-
-  return response;
 }
 
 export async function POST(request: Request) {
@@ -82,21 +55,21 @@ export async function POST(request: Request) {
         resourceIdSuffix: getIdSuffix(payload.turmaId),
         environment: process.env.CONTEXT ?? process.env.NODE_ENV,
       });
-      return redirectWithVerifiedEmail(request, "error", payload.email);
+      return redirectWithStatus(request, "error");
     }
 
     const result = typeof data === "string" ? data : String(data ?? "");
 
     if (result === "active_link_exists" || result === "url_already_registered") {
-      return redirectWithVerifiedEmail(request, "already_exists", payload.email);
+      return redirectWithStatus(request, "already_exists");
     }
 
     if (result === "rate_limited") {
-      return redirectWithVerifiedEmail(request, "rate_limited", payload.email);
+      return redirectWithStatus(request, "rate_limited");
     }
 
     if (result !== "added") {
-      return redirectWithVerifiedEmail(request, "invalid", payload.email);
+      return redirectWithStatus(request, "invalid");
     }
 
     revalidatePath("/");
@@ -118,7 +91,7 @@ export async function POST(request: Request) {
       });
     }
 
-    return redirectWithVerifiedEmail(request, "success", payload.email);
+    return redirectWithStatus(request, "success");
   } catch {
     writeSafeLog("error", {
       event: "verified_link_creation_failed",
@@ -126,6 +99,6 @@ export async function POST(request: Request) {
       resourceIdSuffix: getIdSuffix(payload.turmaId),
       environment: process.env.CONTEXT ?? process.env.NODE_ENV,
     });
-    return redirectWithVerifiedEmail(request, "error", payload.email);
+    return redirectWithStatus(request, "error");
   }
 }
