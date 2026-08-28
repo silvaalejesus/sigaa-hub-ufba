@@ -14,7 +14,7 @@ import { Input } from '@/components/ui/input'
 import { adicionarLink } from '@/features/turmas/actions'
 
 const WHATSAPP_INVITE_REGEX =
-  /^https:\/\/chat\.whatsapp\.com\/[A-Za-z0-9_-]+\/?(?:[?#][^\s]*)?$/
+  /^https:\/\/chat\.whatsapp\.com\/[A-Za-z0-9_-]+\/?$/
 
 const addLinkSchema = v.object({
   // sigaa-hub-private-link-submitter-v1
@@ -137,7 +137,7 @@ export function AddLinkInlineForm({
             Adicionar link da turma {codigoTurma}
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
-            Cole o link de convite do WhatsApp. Parâmetros adicionados pelo WhatsApp são aceitos automaticamente.
+            Cole um link público iniciado por https://chat.whatsapp.com/.
           </p>
         </div>
 

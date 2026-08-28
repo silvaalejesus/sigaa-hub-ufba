@@ -31,13 +31,12 @@ import {
   VERIFIED_EMAIL_COOKIE_NAME,
 } from "@/lib/security/verified-email-cookie";
 import { validateTurnstileToken } from "@/lib/security/turnstile";
-import { normalizeWhatsAppInviteUrl } from "@/lib/security/whatsapp-invite-url";
 import { createPrivilegedSupabaseClient } from "@/lib/supabase/privileged-server";
 import { createAbuseFingerprint } from "@/lib/security/abuse-fingerprint";
 import { createClient } from "@/lib/supabase/server";
 
 const WHATSAPP_INVITE_REGEX =
-  /^https:\/\/chat\.whatsapp\.com\/[A-Za-z0-9_-]+\/?(?:[?#][^\s]*)?$/;
+  /^https:\/\/chat\.whatsapp\.com\/[A-Za-z0-9_-]+\/?$/;
 
 const honeypotSchema = v.optional(
   v.pipe(v.string(), v.maxLength(200, "Dados inválidos.")),
@@ -165,11 +164,6 @@ export async function adicionarLink(
     return validationFailure(parsed.issues[0]?.message ?? "Dados inválidos.");
   }
 
-  const normalizedUrl = normalizeWhatsAppInviteUrl(parsed.output.url);
-  if (!normalizedUrl) {
-    return validationFailure("Informe um link de convite válido do WhatsApp.");
-  }
-
   if (parsed.output.contactReference.trim()) return honeypotFailure();
 
   const turnstile = await validateTurnstileToken(
@@ -224,7 +218,7 @@ export async function adicionarLink(
         "add_link_secure",
         {
           p_turma_id: parsed.output.turmaId,
-          p_url_whatsapp: normalizedUrl,
+          p_url_whatsapp: parsed.output.url,
           p_reporter_fingerprint: fingerprint,
           p_submitter_name: parsed.output.nome,
           p_submitter_registration: parsed.output.matricula,
@@ -251,7 +245,7 @@ export async function adicionarLink(
 
       const notification = await notifyLinkAdded({
         turmaId: parsed.output.turmaId,
-        whatsappUrl: normalizedUrl,
+        whatsappUrl: parsed.output.url,
         submitterName: parsed.output.nome,
         submitterRegistration: parsed.output.matricula,
         submitterEmail: parsed.output.email,
@@ -281,7 +275,7 @@ export async function adicionarLink(
       "request_link_email_verification_secure",
       {
         p_turma_id: parsed.output.turmaId,
-        p_url_whatsapp: normalizedUrl,
+        p_url_whatsapp: parsed.output.url,
         p_reporter_fingerprint: fingerprint,
         p_email_fingerprint: emailFingerprint,
       },
@@ -307,7 +301,7 @@ export async function adicionarLink(
 
     const verificationToken = createLinkEmailVerificationToken({
       turmaId: parsed.output.turmaId,
-      url: normalizedUrl,
+      url: parsed.output.url,
       nome: parsed.output.nome,
       matricula: parsed.output.matricula,
       email: parsed.output.email,
