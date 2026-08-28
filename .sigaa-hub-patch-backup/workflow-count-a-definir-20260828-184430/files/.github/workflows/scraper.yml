@@ -1,0 +1,90 @@
+name: Atualizar dados do SIGAA
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 3 1,15 * *"
+
+permissions:
+  contents: read
+
+env:
+  SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+  SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+  SCRAPER_TRIGGER_SOURCE: ${{ github.event_name == 'schedule' && 'scheduled' || 'github_actions' }}
+
+jobs:
+  scrape-and-sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    defaults:
+      run:
+        working-directory: scraper
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: scraper/requirements.txt
+
+      - name: Instalar dependências
+        run: pip install -r requirements.txt
+
+      - name: Instalar Chromium do Playwright
+        run: python -m playwright install --with-deps chromium
+
+      - name: Extrair dados públicos do SIGAA — 2026.2
+        run: >
+          python scraper.py
+          --ano 2026
+          --periodo 2
+          --debug-html
+          --output dados_sigaa.json
+
+      - name: Validar resultado da coleta
+        run: |
+          python - <<'PY'
+          import json
+          import sys
+
+          with open("dados_sigaa.json", encoding="utf-8") as arquivo:
+              dados = json.load(arquivo)
+
+          metadata = dados.get("metadata", {})
+          disciplinas = dados.get("disciplinas", [])
+          turmas = dados.get("turmas", [])
+
+          print(f"Semestre: {metadata.get('semestre')}")
+          print(f"Unidades encontradas: {metadata.get('total_unidades_encontradas')}")
+          print(f"Unidades processadas: {metadata.get('total_unidades_processadas')}")
+          print(f"Unidades com erro: {metadata.get('total_unidades_com_erro')}")
+          print(f"Disciplinas: {len(disciplinas)}")
+          print(f"Turmas: {len(turmas)}")
+
+          if not disciplinas or not turmas:
+              print("Erro: a coleta retornou zero disciplinas ou zero turmas.")
+              sys.exit(1)
+
+          if metadata.get("total_unidades_com_erro", 0) > 0:
+              print("Aviso: houve unidades com erro durante a coleta.")
+          PY
+
+      - name: Sincronizar dados no Supabase
+        run: python seed.py --input dados_sigaa.json
+
+      - name: Publicar artefato da coleta
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dados-sigaa-2026-2-${{ github.run_number }}
+          path: |
+            scraper/dados_sigaa.json
+            scraper/debug_sigaa/
+          if-no-files-found: ignore
+          retention-days: 7

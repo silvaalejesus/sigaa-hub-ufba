@@ -60,12 +60,20 @@ jobs:
           disciplinas = dados.get("disciplinas", [])
           turmas = dados.get("turmas", [])
 
+          turmas_a_definir = [
+              turma
+              for turma in turmas
+              if str(turma.get("professor", "")).strip().casefold()
+              in {"a definir", "a definir docente"}
+          ]
+
           print(f"Semestre: {metadata.get('semestre')}")
           print(f"Unidades encontradas: {metadata.get('total_unidades_encontradas')}")
           print(f"Unidades processadas: {metadata.get('total_unidades_processadas')}")
           print(f"Unidades com erro: {metadata.get('total_unidades_com_erro')}")
           print(f"Disciplinas: {len(disciplinas)}")
           print(f"Turmas: {len(turmas)}")
+          print(f"Turmas com docente a definir: {len(turmas_a_definir)}")
 
           if not disciplinas or not turmas:
               print("Erro: a coleta retornou zero disciplinas ou zero turmas.")
