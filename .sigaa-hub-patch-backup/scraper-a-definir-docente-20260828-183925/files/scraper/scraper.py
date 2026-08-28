@@ -289,72 +289,6 @@ def select_option_by_text(
     )
 
 
-def select_situacao_todas(
-    page: Page,
-    *,
-    timeout: int = 45_000,
-) -> str:
-    """Seleciona TODAS no campo Situação sem confundir outros selects."""
-    page.wait_for_selector("select", timeout=timeout)
-
-    selects = page.locator("select")
-
-    for select_index in range(selects.count()):
-        select = selects.nth(select_index)
-
-        try:
-            if not select.is_visible():
-                continue
-
-            options = get_select_options(page, select_index)
-            option_by_key = {
-                normalize_key(option.get("text", "")): option
-                for option in options
-                if clean_text(option.get("text", ""))
-            }
-
-            # ABERTA identifica o select de Situação. Outros selects da tela
-            # também possuem TODAS/TODOS, então não selecionamos por texto
-            # globalmente.
-            if "aberta" not in option_by_key:
-                continue
-
-            todas_option = next(
-                (
-                    option
-                    for key, option in option_by_key.items()
-                    if key in {"todas", "todos"}
-                    or key.startswith("todas ")
-                ),
-                None,
-            )
-
-            if todas_option is None:
-                raise RuntimeError(
-                    "O select de Situação foi localizado, "
-                    "mas não possui a opção TODAS."
-                )
-
-            select.select_option(value=todas_option["value"])
-            safe_wait_networkidle(page)
-
-            selected_text = clean_text(todas_option["text"])
-            logging.info("Situação selecionada: %s", selected_text)
-            return selected_text
-        except RuntimeError:
-            raise
-        except Exception as exc:
-            logging.warning(
-                "Falha ao avaliar select #%s como Situação: %s",
-                select_index,
-                exc,
-            )
-
-    raise RuntimeError(
-        "Não foi possível localizar o select de Situação do SIGAA."
-    )
-
-
 def fill_first_visible_text_input(
     page: Page,
     value: str,
@@ -833,9 +767,6 @@ def detect_header_map(cells: List[str]) -> Dict[str, int]:
         if "docente" in key or "professor" in key:
             header_map["docente"] = index
 
-        if "situacao" in key:
-            header_map["situacao"] = index
-
     has_useful_header = (
         "turma" in header_map
         and (
@@ -870,14 +801,12 @@ def extract_turma_from_cells(
     turma = ""
     professor = ""
     horario = ""
-    situacao = ""
     turma_index: Optional[int] = None
 
     if header_map:
         turma = safe_get(cells, header_map.get("turma"))
         professor = safe_get(cells, header_map.get("docente"))
         horario = safe_get(cells, header_map.get("horario"))
-        situacao = safe_get(cells, header_map.get("situacao"))
         turma_index = header_map.get("turma")
 
     if not turma or not is_turma_code(turma):
@@ -951,7 +880,6 @@ def extract_turma_from_cells(
         "codigo_turma": turma,
         "professor": professor or "DOCENTE NÃO INFORMADO",
         "horario": horario,
-        "situacao": situacao,
     }
 
 
@@ -1021,18 +949,6 @@ def parse_sigaa_rows(
 
             if not turma_data:
                 rows_without_turma += 1
-                continue
-
-            situacao_key = normalize_key(
-                turma_data.get("situacao", "")
-            )
-            situacoes_aceitas = {"aberta", "a definir docente"}
-
-            if (
-                situacao_key
-                and situacao_key not in situacoes_aceitas
-            ):
-                discarded_rows += 1
                 continue
 
             disciplina_codigo, _disciplina_nome = current_disciplina
@@ -1178,8 +1094,6 @@ def prepare_form(
         exact=True,
         timeout=args.timeout,
     )
-
-    select_situacao_todas(page, timeout=args.timeout)
 
 
 def discover_unidades(
