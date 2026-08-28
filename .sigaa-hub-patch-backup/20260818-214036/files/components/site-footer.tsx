@@ -3,8 +3,6 @@ import Link from "next/link";
 
 import { FeedbackForm } from "@/components/feedback-form";
 
-import { Github, Linkedin } from "./ui/brand-icons";
-
 const usefulLinks = [
   {
     label: "Calendário acadêmico",
@@ -78,7 +76,7 @@ export function SiteFooter() {
               .
             </p>
 
-            <div className="flex items-center gap-3">
+            {/* <div className="flex items-center gap-3">
               <Link
                 href="#"
                 className="inline-flex items-center gap-2 hover:text-foreground"
@@ -94,7 +92,7 @@ export function SiteFooter() {
                 <Linkedin className="size-4" />
                 LinkedIn
               </Link>
-            </div>
+            </div> */}
           </div>
         </div>
 
